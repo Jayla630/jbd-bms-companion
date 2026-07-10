@@ -1,0 +1,41 @@
+# ============ Python（simulator/）============
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# ============ C# / .NET（upper-computer/，规划中）============
+bin/
+obj/
+*.user
+*.suo
+.vs/
+
+# ============ 微信小程序（miniprogram/，规划中）============
+node_modules/
+miniprogram/**/project.private.config.json
+
+# ============ 操作系统 ============
+.DS_Store
+Thumbs.db
+
+# ============ 编辑器 / IDE ============
+.idea/
+.vscode/
+*.swp
+
+# ============ 项目本地文件 ============
+# 串口抓包、真机导出的私有配置等本地产物
+*.log
+captures/local/
