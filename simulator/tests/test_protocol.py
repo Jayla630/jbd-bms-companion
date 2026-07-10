@@ -1,3 +1,5 @@
+from datetime import date
+
 from bms_sim import protocol as proto
 
 
@@ -68,3 +70,46 @@ def test_frame_decoder_resyncs_after_garbage():
     frames = decoder.feed(garbage + good)
     assert len(frames) == 1
     assert frames[0].register == proto.REG_BASIC_INFO
+
+
+GOLDEN_BASIC_INFO_DATA = bytes.fromhex(
+    "060B0000" "01ED01F4" "00002C7C" "00000000"
+    "1000" "80" "63" "02" "04" "03"
+    "0BA0" "0B9D" "0B98"
+)
+
+
+def test_parse_basic_info_golden_vector():
+    info = proto.parse_basic_info(GOLDEN_BASIC_INFO_DATA)
+    assert info.total_voltage_v == 15.47
+    assert info.current_a == 0.00
+    assert info.remaining_capacity_ah == 4.93
+    assert info.nominal_capacity_ah == 5.00
+    assert info.cycles == 0
+    assert info.production_date == date(2022, 3, 28)
+    assert info.protection_status == 0x1000
+    assert info.software_version == "8.0"
+    assert info.soc_percent == 99
+    assert info.mos_charge_on is False
+    assert info.mos_discharge_on is True
+    assert info.cell_count == 4
+    assert info.ntc_count == 3
+    assert info.temperatures_c == [24.5, 24.2, 23.7]
+
+
+def test_encode_basic_info_round_trip():
+    info = proto.parse_basic_info(GOLDEN_BASIC_INFO_DATA)
+    assert proto.encode_basic_info(info) == GOLDEN_BASIC_INFO_DATA
+
+
+def test_cell_voltages_round_trip():
+    voltages_mv = [3450, 3460, 3440, 3455]
+    data = proto.encode_cell_voltages(voltages_mv)
+    assert data == bytes.fromhex("0D7A0D840D700D7F")
+    assert proto.parse_cell_voltages(data) == voltages_mv
+
+
+def test_device_name_response_is_ascii():
+    frame = proto.encode_response(proto.REG_DEVICE_NAME, proto.STATUS_OK, b"JBD-SP04S010-Sim")
+    decoded = proto.decode_response(frame)
+    assert decoded.data.decode("ascii") == "JBD-SP04S010-Sim"
