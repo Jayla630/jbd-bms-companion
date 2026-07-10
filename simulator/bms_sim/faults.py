@@ -122,6 +122,9 @@ class FaultManager:
         self._configs = {bit: FaultConfig() for bit in ProtectionBit if bit != ProtectionBit.MOS_LOCKED}
         self._pending_seconds = {}
         self._trigger_counts = {}
+        # 手动注入（inject）的故障位在这里登记，evaluate() 按物理量自动评估时会跳过
+        # 这些位，避免"演示时手动置的故障，下一次读数就被自动恢复逻辑清掉"。
+        self._manual_bits = set()
 
     def configure(self, bit: ProtectionBit, trigger_mode: str = "instant", delay_seconds: float = 0.0, clear_mode: str = "auto") -> None:
         self._configs[bit] = FaultConfig(trigger_mode, delay_seconds, clear_mode)
@@ -141,12 +144,14 @@ class FaultManager:
             self.mos.lock()
             self._set_bit(bit)
             return
+        self._manual_bits.add(bit)
         self._set_bit(bit)
         self._apply_mos_action(bit)
 
     def clear(self, bit: ProtectionBit) -> None:
         if bit == ProtectionBit.MOS_LOCKED:
             return  # bit12 只能通过 MosController 的解锁流程清除
+        self._manual_bits.discard(bit)
         self._clear_bit(bit)
 
     def evaluate(self, *, cell_voltages_v: list, pack_voltage_v: float, temperatures_c: list, current_ma: float, dt_seconds: float) -> None:
@@ -188,6 +193,8 @@ class FaultManager:
             self._evaluate_one(bit, triggered, recovered, dt_seconds)
 
     def _evaluate_one(self, bit: ProtectionBit, triggered: bool, recovered: bool, dt_seconds: float) -> None:
+        if bit in self._manual_bits:
+            return  # 手动注入的故障只能通过 clear() 解除，不受物理量自动评估影响
         config = self._configs[bit]
         if triggered:
             if config.trigger_mode == "instant":
