@@ -1,0 +1,16 @@
+name: "演示：充电升压 -> 触发单体过压 -> 保护动作 -> 清故障 -> 放电"
+steps:
+  - wait_seconds: 0
+    action: "current 2000"
+  - wait_seconds: 1
+    action: "status"
+  - wait_seconds: 1
+    action: "fault inject cell_overvoltage"
+  - wait_seconds: 1
+    action: "status"
+  - wait_seconds: 1
+    action: "fault clear cell_overvoltage"
+  - wait_seconds: 1
+    action: "current -1500"
+  - wait_seconds: 1
+    action: "status"
