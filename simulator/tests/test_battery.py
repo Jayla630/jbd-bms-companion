@@ -62,3 +62,28 @@ def test_battery_pack_biased_cell_reaches_low_soc_first_on_discharge():
     socs = [c.soc_percent for c in pack.cells]
     assert socs[2] == min(socs)
     assert socs[2] < socs[0]
+
+
+def test_thermal_model_heats_up_under_load():
+    model = battery.ThermalModel(ntc_count=3, ambient_c=25.0)
+    start_temp = model.core_temp_c
+    for _ in range(60):
+        model.advance(current_ma=20000.0, dt_seconds=1.0)  # 20A 持续 60 秒
+    assert model.core_temp_c > start_temp
+
+
+def test_thermal_model_cools_down_after_stop():
+    model = battery.ThermalModel(ntc_count=3, ambient_c=25.0)
+    model.core_temp_c = 45.0
+    for _ in range(120):
+        model.advance(current_ma=0.0, dt_seconds=1.0)
+    assert model.core_temp_c < 45.0
+    assert model.core_temp_c > 25.0  # 还没完全回落到环境温度
+
+
+def test_thermal_model_ntc_readings_have_small_distinct_offsets():
+    model = battery.ThermalModel(ntc_count=3, ambient_c=25.0)
+    temps = model.ntc_temperatures_c
+    assert len(temps) == 3
+    assert len(set(temps)) == 3  # 三路读数互不相同
+    assert all(abs(t - 25.0) < 2.0 for t in temps)

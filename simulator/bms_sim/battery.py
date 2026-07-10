@@ -105,3 +105,28 @@ class BatteryPack:
     @property
     def cell_voltages_mv(self) -> list:
         return [round(cell.terminal_voltage(self.current_ma) * 1000) for cell in self.cells]
+
+
+# --- 真机校准点：热阻/热容/生热内阻都是估算值，真机满载稳态温升实测后调整。
+DEFAULT_AMBIENT_TEMP_C = 25.0
+DEFAULT_THERMAL_RESISTANCE_C_PER_W = 8.0
+DEFAULT_THERMAL_MASS_J_PER_C = 400.0
+DEFAULT_PACK_RESISTANCE_FOR_HEATING_OHM = 0.02
+
+
+class ThermalModel:
+    def __init__(self, ntc_count: int = 3, ambient_c: float = DEFAULT_AMBIENT_TEMP_C):
+        self.ambient_c = ambient_c
+        self.core_temp_c = ambient_c
+        self._ntc_offsets_c = [(i - (ntc_count - 1) / 2) * 0.3 for i in range(ntc_count)]
+
+    def advance(self, current_ma: float, dt_seconds: float) -> None:
+        current_a = abs(current_ma) / 1000.0
+        heat_power_w = (current_a**2) * DEFAULT_PACK_RESISTANCE_FOR_HEATING_OHM
+        cooling_power_w = (self.core_temp_c - self.ambient_c) / DEFAULT_THERMAL_RESISTANCE_C_PER_W
+        net_power_w = heat_power_w - cooling_power_w
+        self.core_temp_c += net_power_w / DEFAULT_THERMAL_MASS_J_PER_C * dt_seconds
+
+    @property
+    def ntc_temperatures_c(self) -> list:
+        return [round(self.core_temp_c + offset, 2) for offset in self._ntc_offsets_c]
