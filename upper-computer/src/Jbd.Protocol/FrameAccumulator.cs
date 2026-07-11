@@ -1,9 +1,14 @@
+using System.Runtime.InteropServices;
+
 namespace Jbd.Protocol;
 
 /// <summary>
 /// 串口字节流帧累积器：串口一次给的数据未必是整帧（分包），也可能不止一帧（粘包）。
 /// 喂入任意字节块，切出所有完整帧（DD … 77，总长 = 长度字段 + 7）；
-/// 遇到假起始码、结尾不对或长度离谱时丢弃重新对齐，不会卡死缓冲。
+/// 遇到假起始码、结尾不对、长度离谱或校验和不匹配时退字节重新对齐，不会卡死缓冲。
+/// 校验和参与分帧边界判定，防止"起始/长度/结束恰好都对上"的伪帧连带吞掉后续真帧，
+/// 与 Python 侧 FrameDecoder 的重对齐行为一致；上层 TryParse* 仍保留完整校验（纵深防御）。
+/// 本累积器按【响应帧】语义分帧：校验和覆盖 状态字节 + 长度 + 数据（帧内偏移 2、3、4..）。
 /// 非线程安全，调用方保证只在一个线程上喂数据（串口接收线程）。
 /// </summary>
 public sealed class FrameAccumulator
@@ -53,6 +58,15 @@ public sealed class FrameAccumulator
             if (_buffer[total - 1] != JbdFrame.End)
             {
                 _buffer.RemoveAt(0); // 结尾不对：假帧，丢起始码重新对齐
+                continue;
+            }
+
+            ushort expectedChecksum = JbdChecksum.ComputeResponse(
+                _buffer[2], CollectionsMarshal.AsSpan(_buffer).Slice(4, dataLength));
+            if (_buffer[total - 3] != (byte)(expectedChecksum >> 8) ||
+                _buffer[total - 2] != (byte)(expectedChecksum & 0xFF))
+            {
+                _buffer.RemoveAt(0); // 校验和不匹配：伪帧，同样退 1 字节重找
                 continue;
             }
 
