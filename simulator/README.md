@@ -64,7 +64,10 @@ server 启动后**自带交互控制台**（stdin 后台线程），命令作用
 ```
 soc 80                 # 界面 SOC 跳到 80%，单体电压随 OCV 曲线上移
 current -1500          # 1.5A 放电，界面电流变 -1.50A
-fault inject cell_overvoltage
+fault inject discharge_overcurrent   # 注入保护位：上位机保护面板对应项点亮（BMS 会联动关 MOS）
+fault clear discharge_overcurrent    # 清除后熄灭（MOS 不自动重开，贴近真板）
+fault inject mos_locked              # 注入 bit12 软件锁定：上位机打出醒目横幅，此后 0xE1 写入被静默拒绝
+mos 0x03               # 直接写 MOS 控制字（0xE1 关闭语义：bit0 关放电、bit1 关充电）
 help                   # 完整命令列表（与 cli.py REPL 同一套解释器）
 quit                   # 只退出控制台，串口服务继续；Ctrl+C 停整个 server
 ```

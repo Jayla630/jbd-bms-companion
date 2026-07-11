@@ -22,6 +22,7 @@
 - [x] 阶段〇 · 软件地基：协议三表、模拟器切片提示词
 - [x] 阶段一 · 串口 BMS 模拟器（`simulator/`）
 - [x] 阶段二 · 切片1 · PC 上位机读数据链路（[`upper-computer/`](upper-computer/README.md)）
+- [x] 阶段二 · 切片2 · 写命令（0xE1 MOS / 0xE2 均衡）与保护状态展示（[`upper-computer/`](upper-computer/README.md)）
 - [ ] 阶段三 · 微信小程序
 - [ ] 阶段四 · 真机联调与校准
 
