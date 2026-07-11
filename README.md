@@ -7,7 +7,7 @@
 | 目录 | 内容 | 技术栈 |
 |---|---|---|
 | `simulator/` | 串口 BMS 模拟器：模拟 SP04S010 从站，让上位机开发不依赖真板子 | Python |
-| `upper-computer/` | PC 上位机（规划中） | C# / WPF |
+| `upper-computer/` | PC 上位机：连接串口轮询 0x03/0x04，实时显示电压/电流/SOC/单体电压 | C# / WPF + Prism |
 | `miniprogram/` | 微信小程序（规划中） | 原生小程序 |
 | `docs/` | 协议参考、寄存器表、保护参数、抓包记录 | — |
 
@@ -21,13 +21,13 @@
 
 - [x] 阶段〇 · 软件地基：协议三表、模拟器切片提示词
 - [x] 阶段一 · 串口 BMS 模拟器（`simulator/`）
-- [ ] 阶段二 · PC 上位机
+- [x] 阶段二 · 切片1 · PC 上位机读数据链路（[`upper-computer/`](upper-computer/README.md)）
 - [ ] 阶段三 · 微信小程序
 - [ ] 阶段四 · 真机联调与校准
 
 ## 快速开始
 
-各子项目的运行方式见对应目录下的 README。模拟器从 [`simulator/README.md`](simulator/README.md) 开始。
+各子项目的运行方式见对应目录下的 README。模拟器从 [`simulator/README.md`](simulator/README.md) 开始；上位机从 [`upper-computer/README.md`](upper-computer/README.md) 开始，两者用虚拟串口对联调。
 
 ## 说明
 
