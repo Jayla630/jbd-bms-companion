@@ -27,4 +27,55 @@ public static class JbdFrame
             End,
         ];
     }
+
+    /// <summary>解析 0x03 基础信息响应帧。校验不过或字段不完整返回 false。</summary>
+    public static bool TryParseBasicInfo(ReadOnlySpan<byte> frame, out BasicInfo? info)
+    {
+        info = null;
+        if (!TryGetResponseData(frame, RegBasicInfo, out var data) || data.Length < 20)
+        {
+            return false;
+        }
+
+        // 偏移与刻度见 docs/ 2.4：总电压 ×10mV，电流 s16 ×10mA，SOC 在偏移 19。
+        double totalVoltageV = ReadUInt16(data, 0) / 100.0;
+        double currentA = ReadInt16(data, 2) / 100.0;
+        int socPercent = data[19];
+
+        info = new BasicInfo(totalVoltageV, currentA, socPercent);
+        return true;
+    }
+
+    /// <summary>
+    /// 校验响应帧的公共骨架：起始/结束码、寄存器回显、状态 0x00、长度字段与实际一致、校验和匹配。
+    /// 全部通过时给出数据区切片。
+    /// </summary>
+    private static bool TryGetResponseData(
+        ReadOnlySpan<byte> frame, byte expectedRegister, out ReadOnlySpan<byte> data)
+    {
+        data = default;
+        if (frame.Length < ResponseOverhead ||
+            frame[0] != Start || frame[^1] != End ||
+            frame[1] != expectedRegister || frame[2] != StatusOk ||
+            frame[3] != frame.Length - ResponseOverhead)
+        {
+            return false;
+        }
+
+        var payload = frame.Slice(4, frame[3]);
+        ushort expectedChecksum = JbdChecksum.ComputeResponse(frame[2], payload);
+        if (frame[^3] != (byte)(expectedChecksum >> 8) || frame[^2] != (byte)(expectedChecksum & 0xFF))
+        {
+            return false;
+        }
+
+        data = payload;
+        return true;
+    }
+
+    private static ushort ReadUInt16(ReadOnlySpan<byte> data, int offset)
+        => (ushort)((data[offset] << 8) | data[offset + 1]);
+
+    private static short ReadInt16(ReadOnlySpan<byte> data, int offset)
+        => (short)ReadUInt16(data, offset);
 }
