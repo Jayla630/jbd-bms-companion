@@ -23,6 +23,7 @@
 - [x] 阶段一 · 串口 BMS 模拟器（`simulator/`）
 - [x] 阶段二 · 切片1 · PC 上位机读数据链路（[`upper-computer/`](upper-computer/README.md)）
 - [x] 阶段二 · 切片2 · 写命令（0xE1 MOS / 0xE2 均衡）与保护状态展示（[`upper-computer/`](upper-computer/README.md)）
+- [x] 阶段二 · 切片3 · MOS 软件锁定（bit12）的引导式三步解锁（[`upper-computer/`](upper-computer/README.md)）
 - [ ] 阶段三 · 微信小程序
 - [ ] 阶段四 · 真机联调与校准
 
