@@ -77,6 +77,7 @@ class Device:
     def write_mos_control(self, *, close_discharge: bool, close_charge: bool) -> None:
         with self._lock:
             self.mos.write_control(close_discharge=close_discharge, close_charge=close_charge)
+            self.faults.sync_mos_lock()
 
     def set_core_temp_c(self, value: float) -> None:
         with self._lock:
@@ -133,6 +134,7 @@ class Device:
                 return proto.encode_response(register, proto.STATUS_ERROR, b"")
             value = int.from_bytes(data, "big")
             self.mos.write_control(close_discharge=bool(value & 0x01), close_charge=bool(value & 0x02))
+            self.faults.sync_mos_lock()
             return proto.encode_response(register, proto.STATUS_OK, b"")
         if register == proto.REG_BALANCE_CONTROL:
             if len(data) != 2:

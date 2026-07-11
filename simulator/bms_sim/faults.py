@@ -154,6 +154,16 @@ class FaultManager:
         self._manual_bits.discard(bit)
         self._clear_bit(bit)
 
+    def sync_mos_lock(self) -> None:
+        """MosController 走完解锁流程后同步清除 bit12。
+
+        锁定状态的真值在 MosController，保护位图在本类；0xE1 写入口每次
+        推进解锁状态机后调用本方法，保证 0x03 回读的 bit12 与真值一致
+        （上位机以该位判解锁成败）。
+        """
+        if not self.mos.locked and self.is_set(ProtectionBit.MOS_LOCKED):
+            self._clear_bit(ProtectionBit.MOS_LOCKED)
+
     def evaluate(self, *, cell_voltages_v: list, pack_voltage_v: float, temperatures_c: list, current_ma: float, dt_seconds: float) -> None:
         current_a = current_ma / 1000.0
         ov = PROTECTION_THRESHOLDS

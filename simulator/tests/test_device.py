@@ -84,6 +84,24 @@ def test_basic_info_shows_injected_fault_protection_bit():
     assert info.protection_status & (1 << int(ProtectionBit.CELL_OVERVOLTAGE))
 
 
+def test_unlock_sequence_via_register_writes_clears_bit12_in_readback():
+    """解锁走完后 0x03 回读的保护状态 bit12 必须清零——上位机以此判解锁成败。"""
+    device = Device()
+    device.inject_fault(ProtectionBit.MOS_LOCKED)
+
+    for word in (0x0003, 0x0001, 0x0000):
+        frame = proto.RequestFrame(
+            op=proto.OP_WRITE, register=proto.REG_MOS_CONTROL, data=word.to_bytes(2, "big"))
+        decoded = proto.decode_response(device.handle_request(frame))
+        assert decoded.status == proto.STATUS_OK
+
+    read_frame = proto.RequestFrame(op=proto.OP_READ, register=proto.REG_BASIC_INFO, data=b"")
+    info = proto.parse_basic_info(proto.decode_response(device.handle_request(read_frame)).data)
+    assert not info.protection_status & (1 << int(ProtectionBit.MOS_LOCKED))
+    assert info.mos_charge_on is True
+    assert info.mos_discharge_on is True
+
+
 def test_unknown_register_returns_error_status():
     device = Device()
     frame = proto.RequestFrame(op=proto.OP_READ, register=0x99, data=b"")
