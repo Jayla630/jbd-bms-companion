@@ -17,4 +17,17 @@ public static class JbdMosControl
 
     /// <summary>0xE2 均衡开关 2 字节数据：非 0 即开（与 simulator device.py 对拍）。</summary>
     public static byte[] BuildBalanceData(bool on) => [0x00, (byte)(on ? 0x01 : 0x00)];
+
+    /// <summary>
+    /// bit12 软件锁定的引导式解锁序列：按序返回三个 0xE1 控制字（各 2 字节大端）。
+    /// 顺序是命门，与 simulator faults.py 的 MosController 状态机对拍——错序写入被
+    /// 设备静默忽略：① 0x0003 两路全关（幂等起点，任何残留状态重跑都安全）→
+    /// ② 0x0001 开充电、放电仍关 → ③ 0x0000 两路全开、锁定解除。
+    /// </summary>
+    public static byte[][] BuildUnlockSequence() =>
+    [
+        BuildControlData(chargeOn: false, dischargeOn: false), // ① 0x0003 全关
+        BuildControlData(chargeOn: true, dischargeOn: false),  // ② 0x0001 先开充电
+        BuildControlData(chargeOn: true, dischargeOn: true),   // ③ 0x0000 再开放电
+    ];
 }
