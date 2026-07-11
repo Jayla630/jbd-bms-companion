@@ -45,6 +45,10 @@ public class MainViewModel : BindableBase, IDisposable
     private int _socPercent;
     private DateTime? _lastUpdated;
     private string? _errorMessage;
+    private bool _chargeMosOn;
+    private bool _dischargeMosOn;
+    private bool _balanceOn;
+    private bool _pendingBalanceRequest;
 
     public MainViewModel(ISerialBmsClient client)
     {
@@ -52,6 +56,7 @@ public class MainViewModel : BindableBase, IDisposable
         _dispatcher = Application.Current.Dispatcher;
         _client.BasicInfoReceived += OnBasicInfoReceived;
         _client.CellVoltagesReceived += OnCellVoltagesReceived;
+        _client.WriteAcknowledged += OnWriteAcknowledged;
         _client.ResponseTimedOut += OnResponseTimedOut;
 
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
@@ -146,6 +151,63 @@ public class MainViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _errorMessage, value);
     }
 
+    /// <summary>
+    /// 充电 MOS 开关。显示值来自 0x03 回读的 FET 状态（非乐观更新）：
+    /// setter 不改本地值，只把目标状态入队写 0xE1，并立即通知界面弹回当前回读值；
+    /// 真正的状态变化等下一轮 0x03 回读驱动。写被设备静默拒绝（如软件锁定）时开关自然弹回。
+    /// </summary>
+    public bool ChargeMosOn
+    {
+        get => _chargeMosOn;
+        set
+        {
+            if (_chargeMosOn == value)
+            {
+                return;
+            }
+
+            _client.WriteMosControl(chargeOn: value, dischargeOn: _dischargeMosOn);
+            SnapBack(nameof(ChargeMosOn));
+        }
+    }
+
+    /// <summary>放电 MOS 开关，语义同 <see cref="ChargeMosOn"/>。</summary>
+    public bool DischargeMosOn
+    {
+        get => _dischargeMosOn;
+        set
+        {
+            if (_dischargeMosOn == value)
+            {
+                return;
+            }
+
+            _client.WriteMosControl(chargeOn: _chargeMosOn, dischargeOn: value);
+            SnapBack(nameof(DischargeMosOn));
+        }
+    }
+
+    /// <summary>
+    /// 均衡开关（0xE2）。协议的 0x03 响应里没有"均衡使能"回读字段（docs/ 寄存器表，
+    /// 偏移 12–15 是逐串均衡动作位图而非使能开关），所以此开关以写 ack 受理为准更新显示，
+    /// 仍非乐观：ack 未受理或超时则弹回。
+    /// </summary>
+    public bool BalanceOn
+    {
+        get => _balanceOn;
+        set
+        {
+            if (_balanceOn == value)
+            {
+                return;
+            }
+
+            _pendingBalanceRequest = value;
+            _client.WriteBalance(value);
+            SnapBack(nameof(BalanceOn));
+        }
+    }
+
     private bool IsConnected => ConnectionState != ConnectionState.Disconnected;
 
     private void RefreshPorts()
@@ -188,7 +250,36 @@ public class MainViewModel : BindableBase, IDisposable
     {
         _client.BasicInfoReceived -= OnBasicInfoReceived;
         _client.CellVoltagesReceived -= OnCellVoltagesReceived;
+        _client.WriteAcknowledged -= OnWriteAcknowledged;
         _client.ResponseTimedOut -= OnResponseTimedOut;
+    }
+
+    /// <summary>
+    /// 开关 setter 的"弹回"：本地值未变，异步补发一次变更通知，
+    /// 让绑定控件回读 getter 恢复显示（同步 Raise 会被 WPF 在绑定更新中忽略）。
+    /// </summary>
+    private void SnapBack(string propertyName)
+        => _dispatcher.BeginInvoke(() => RaisePropertyChanged(propertyName));
+
+    private void OnWriteAcknowledged(byte register, bool accepted)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            if (!accepted)
+            {
+                ErrorMessage = $"写入 0x{register:X2} 被设备拒绝";
+                return;
+            }
+
+            ErrorMessage = null;
+            if (register == JbdFrame.RegBalanceControl && _balanceOn != _pendingBalanceRequest)
+            {
+                _balanceOn = _pendingBalanceRequest;
+                RaisePropertyChanged(nameof(BalanceOn));
+            }
+
+            // 0xE1 受理只代表命令被接受，MOS 实际状态仍等下一轮 0x03 回读刷新
+        });
     }
 
     private void OnResponseTimedOut()
@@ -210,12 +301,29 @@ public class MainViewModel : BindableBase, IDisposable
             TotalVoltageV = info.TotalVoltageV;
             CurrentA = info.CurrentA;
             SocPercent = info.SocPercent;
+            UpdateMosFromReadback(info);
             LastUpdated = DateTime.Now;
             if (IsConnected)
             {
                 ConnectionState = ConnectionState.Communicating;
             }
         });
+    }
+
+    /// <summary>MOS 开关显示值只从 0x03 回读更新（绕过公开 setter 的写副作用）。UI 线程调用。</summary>
+    private void UpdateMosFromReadback(BasicInfo info)
+    {
+        if (_chargeMosOn != info.ChargeMosOn)
+        {
+            _chargeMosOn = info.ChargeMosOn;
+            RaisePropertyChanged(nameof(ChargeMosOn));
+        }
+
+        if (_dischargeMosOn != info.DischargeMosOn)
+        {
+            _dischargeMosOn = info.DischargeMosOn;
+            RaisePropertyChanged(nameof(DischargeMosOn));
+        }
     }
 
     private void OnCellVoltagesReceived(CellVoltages cells)

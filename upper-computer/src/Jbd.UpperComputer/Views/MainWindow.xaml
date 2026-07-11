@@ -4,10 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:prism="http://prismlibrary.com/"
     Title="JBD BMS 上位机"
-    Width="720"
-    Height="480"
-    MinWidth="560"
-    MinHeight="400"
+    Width="900"
+    Height="520"
+    MinWidth="720"
+    MinHeight="440"
     prism:ViewModelLocator.AutoWireViewModel="True">
     <Grid Margin="12">
         <Grid.RowDefinitions>
@@ -55,9 +55,10 @@
                 Text="{Binding ConnectionStateText}" />
         </DockPanel>
 
-        <!--  数据区：总电压 / 电流 / SOC + 单体电压  -->
+        <!--  数据区：总电压 / 电流 / SOC + 单体电压 + 控制/保护  -->
         <Grid Grid.Row="1" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -104,6 +105,34 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
+            </StackPanel>
+
+            <StackPanel Grid.Column="2">
+                <GroupBox Padding="8" Header="控制（回读为准）">
+                    <StackPanel>
+                        <CheckBox
+                            Margin="0,4"
+                            Content="充电 MOS"
+                            FontSize="16"
+                            IsChecked="{Binding ChargeMosOn}" />
+                        <CheckBox
+                            Margin="0,4"
+                            Content="放电 MOS"
+                            FontSize="16"
+                            IsChecked="{Binding DischargeMosOn}" />
+                        <CheckBox
+                            Margin="0,4"
+                            Content="均衡"
+                            FontSize="16"
+                            IsChecked="{Binding BalanceOn}" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            FontSize="11"
+                            Foreground="Gray"
+                            Text="开关显示设备实际状态，拨动后等下一轮回读确认"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </GroupBox>
             </StackPanel>
         </Grid>
 
