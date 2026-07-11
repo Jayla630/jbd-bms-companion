@@ -46,6 +46,26 @@ public static class JbdFrame
         return true;
     }
 
+    /// <summary>解析 0x04 单体电压响应帧（N × u16 大端，单位 mV）。校验不过返回 false。</summary>
+    public static bool TryParseCellVoltages(ReadOnlySpan<byte> frame, out CellVoltages? cells)
+    {
+        cells = null;
+        if (!TryGetResponseData(frame, RegCellVoltages, out var data) ||
+            data.Length == 0 || data.Length % 2 != 0)
+        {
+            return false;
+        }
+
+        var voltages = new double[data.Length / 2];
+        for (int i = 0; i < voltages.Length; i++)
+        {
+            voltages[i] = ReadUInt16(data, i * 2) / 1000.0;
+        }
+
+        cells = new CellVoltages(voltages);
+        return true;
+    }
+
     /// <summary>
     /// 校验响应帧的公共骨架：起始/结束码、寄存器回显、状态 0x00、长度字段与实际一致、校验和匹配。
     /// 全部通过时给出数据区切片。
