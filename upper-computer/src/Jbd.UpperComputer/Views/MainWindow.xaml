@@ -107,11 +107,13 @@
             </StackPanel>
         </Grid>
 
-        <!--  状态栏：最后刷新时间  -->
-        <TextBlock
-            Grid.Row="2"
-            Margin="0,8,0,0"
-            Foreground="Gray"
-            Text="{Binding LastUpdatedText}" />
+        <!--  状态栏：最后刷新时间 + 错误信息  -->
+        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+            <TextBlock Foreground="Gray" Text="{Binding LastUpdatedText}" />
+            <TextBlock
+                Margin="16,0,0,0"
+                Foreground="Firebrick"
+                Text="{Binding ErrorMessage}" />
+        </DockPanel>
     </Grid>
 </Window>

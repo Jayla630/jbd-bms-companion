@@ -1,5 +1,9 @@
 using System.Collections.ObjectModel;
 using System.IO.Ports;
+using System.Windows;
+using System.Windows.Threading;
+using Jbd.Protocol;
+using Jbd.UpperComputer.Services;
 using Prism.Commands;
 using Prism.Mvvm;
 
@@ -29,8 +33,10 @@ public sealed class CellReading : BindableBase
     }
 }
 
-public class MainViewModel : BindableBase
+public class MainViewModel : BindableBase, IDisposable
 {
+    private readonly ISerialBmsClient _client;
+    private readonly Dispatcher _dispatcher;
     private string? _selectedPort;
     private int _baudRate = 9600;
     private ConnectionState _connectionState = ConnectionState.Disconnected;
@@ -38,9 +44,15 @@ public class MainViewModel : BindableBase
     private double _currentA;
     private int _socPercent;
     private DateTime? _lastUpdated;
+    private string? _errorMessage;
 
-    public MainViewModel()
+    public MainViewModel(ISerialBmsClient client)
     {
+        _client = client;
+        _dispatcher = Application.Current.Dispatcher;
+        _client.BasicInfoReceived += OnBasicInfoReceived;
+        _client.CellVoltagesReceived += OnCellVoltagesReceived;
+
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
         ConnectCommand = new DelegateCommand(Connect, CanConnect)
             .ObservesProperty(() => SelectedPort)
@@ -127,6 +139,12 @@ public class MainViewModel : BindableBase
     public string LastUpdatedText =>
         LastUpdated is { } t ? $"最后刷新：{t:HH:mm:ss.fff}" : "尚未收到数据";
 
+    public string? ErrorMessage
+    {
+        get => _errorMessage;
+        private set => SetProperty(ref _errorMessage, value);
+    }
+
     private bool IsConnected => ConnectionState != ConnectionState.Disconnected;
 
     private void RefreshPorts()
@@ -147,12 +165,67 @@ public class MainViewModel : BindableBase
 
     private void Connect()
     {
-        // 壳子：真正的串口打开与轮询在后续提交接入
-        ConnectionState = ConnectionState.Connected;
+        try
+        {
+            _client.Connect(SelectedPort!, BaudRate);
+            ErrorMessage = null;
+            ConnectionState = ConnectionState.Connected;
+            _client.SendRead(JbdFrame.RegBasicInfo);
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"连接失败：{ex.Message}";
+        }
     }
 
     private void Disconnect()
     {
+        _client.Disconnect();
         ConnectionState = ConnectionState.Disconnected;
+    }
+
+    public void Dispose()
+    {
+        _client.BasicInfoReceived -= OnBasicInfoReceived;
+        _client.CellVoltagesReceived -= OnCellVoltagesReceived;
+    }
+
+    /// <summary>串口线程 → Dispatcher marshal 回 UI 线程后才碰绑定属性（硬约束 4.3）。</summary>
+    private void OnBasicInfoReceived(BasicInfo info)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            TotalVoltageV = info.TotalVoltageV;
+            CurrentA = info.CurrentA;
+            SocPercent = info.SocPercent;
+            LastUpdated = DateTime.Now;
+            if (IsConnected)
+            {
+                ConnectionState = ConnectionState.Communicating;
+            }
+        });
+    }
+
+    private void OnCellVoltagesReceived(CellVoltages cells)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            while (Cells.Count < cells.CellVoltagesV.Count)
+            {
+                Cells.Add(new CellReading(Cells.Count + 1));
+            }
+
+            while (Cells.Count > cells.CellVoltagesV.Count)
+            {
+                Cells.RemoveAt(Cells.Count - 1);
+            }
+
+            for (int i = 0; i < cells.CellVoltagesV.Count; i++)
+            {
+                Cells[i].VoltageV = cells.CellVoltagesV[i];
+            }
+
+            LastUpdated = DateTime.Now;
+        });
     }
 }
