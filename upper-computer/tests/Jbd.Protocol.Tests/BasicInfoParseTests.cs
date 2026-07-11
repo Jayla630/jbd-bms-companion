@@ -26,6 +26,36 @@ public class BasicInfoParseTests
     }
 
     [Fact]
+    public void TryParseBasicInfo_GoldenVector_YieldsProtectionAndFetStatus()
+    {
+        // docs/ 1.3 黄金向量：保护状态 10 00（bit12 MOS 软件锁定）、MOS 状态 02（放电开、充电关）
+        byte[] frame = Convert.FromHexString(GoldenBasicInfoFrameHex);
+
+        Assert.True(JbdFrame.TryParseBasicInfo(frame, out var info));
+        Assert.Equal(0x1000, info!.ProtectionStatus);
+        Assert.Equal(0x02, info.FetStatus);
+        Assert.False(info.ChargeMosOn);
+        Assert.True(info.DischargeMosOn);
+        Assert.True(info.MosSoftwareLocked);
+    }
+
+    [Fact]
+    public void TryParseBasicInfo_NoProtection_AllStatusFlagsClear()
+    {
+        // 保护清零、MOS 状态改 0x03（充放全开），校验和配套修正
+        byte[] frame = Convert.FromHexString(GoldenBasicInfoFrameHex);
+        frame[20] = 0x00; // 保护状态高字节（数据区偏移 16 → 帧偏移 20）
+        frame[24] = 0x03; // MOS 状态（数据区偏移 20 → 帧偏移 24）
+        FixupResponseChecksum(frame);
+
+        Assert.True(JbdFrame.TryParseBasicInfo(frame, out var info));
+        Assert.Equal(0x0000, info!.ProtectionStatus);
+        Assert.True(info.ChargeMosOn);
+        Assert.True(info.DischargeMosOn);
+        Assert.False(info.MosSoftwareLocked);
+    }
+
+    [Fact]
     public void TryParseBasicInfo_DischargeCurrent_IsNegative()
     {
         // 电流是有符号 s16：-1.50 A = -150 × 10 mA = 0xFF6A。

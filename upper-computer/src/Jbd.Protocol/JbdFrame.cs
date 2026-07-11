@@ -62,17 +62,19 @@ public static class JbdFrame
     public static bool TryParseBasicInfo(ReadOnlySpan<byte> frame, out BasicInfo? info)
     {
         info = null;
-        if (!TryGetResponseData(frame, RegBasicInfo, out var data) || data.Length < 20)
+        if (!TryGetResponseData(frame, RegBasicInfo, out var data) || data.Length < 21)
         {
             return false;
         }
 
-        // 偏移与刻度见 docs/ 2.4：总电压 ×10mV，电流 s16 ×10mA，SOC 在偏移 19。
-        double totalVoltageV = ReadUInt16(data, 0) / 100.0;
-        double currentA = ReadInt16(data, 2) / 100.0;
-        int socPercent = data[19];
-
-        info = new BasicInfo(totalVoltageV, currentA, socPercent);
+        // 偏移与刻度见 docs/ 2.4：总电压 ×10mV，电流 s16 ×10mA，
+        // 保护状态 u16 在偏移 16，SOC 在偏移 19，MOS(FET) 状态在偏移 20。
+        info = new BasicInfo(
+            TotalVoltageV: ReadUInt16(data, 0) / 100.0,
+            CurrentA: ReadInt16(data, 2) / 100.0,
+            SocPercent: data[19],
+            ProtectionStatus: ReadUInt16(data, 16),
+            FetStatus: data[20]);
         return true;
     }
 
