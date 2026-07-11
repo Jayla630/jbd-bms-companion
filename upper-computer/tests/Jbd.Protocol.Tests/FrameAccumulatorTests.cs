@@ -52,6 +52,22 @@ public class FrameAccumulatorTests
     }
 
     [Fact]
+    public void Feed_ChecksumMismatchPseudoFrame_IsRejectedAndOnlyRealFrameEmitted()
+    {
+        // 起始码、长度字段、结束码三者全对、只有校验和不对的"伪帧"：
+        // 若累积器不把校验和折进边界判定，会把它当合法帧整段吃掉（可能连带吞掉后面真帧的开头）。
+        // 期望行为与 Python FrameDecoder 对齐：校验不过只退 1 字节重找，最终只吐出后面那条真帧。
+        byte[] pseudo = Convert.FromHexString("DD" + "04" + "00" + "08" + "0D7A0D840D700D7F" + "0000" + "77");
+        byte[] good = GoldenBasicInfoFrame();
+        var accumulator = new FrameAccumulator();
+
+        var frames = accumulator.Feed([.. pseudo, .. good]);
+
+        Assert.Single(frames);
+        Assert.Equal(good, frames[0]);
+    }
+
+    [Fact]
     public void Feed_AbsurdLengthField_IsDroppedAndResyncs()
     {
         // 长度字段离谱（超过上限）时不能傻等后续字节，要丢弃并继续找下一个起始码。
