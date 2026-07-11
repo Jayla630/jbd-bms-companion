@@ -59,11 +59,22 @@ python -m bms_sim.server --port COM10 --baudrate 9600
 
 （Linux/Mac 换成 `--port /dev/pts/3`。）
 
-## 用控制台驱动模拟器
+server 启动后**自带交互控制台**（stdin 后台线程），命令作用在与串口收发**共享的同一个 `Device`** 上——在 server 终端里敲命令改电流/SOC/注入故障，挂在串口另一端的上位机能当场看到数值变化：
 
-`server.py`（真实串口）和 `cli.py`（控制台）目前各自持有独立的 `Device` 实例，`cli.py` 默认是一个不接串口、方便本地快速试验/写自动化场景的"空跑"模式。真正联调上位机时，控制台命令要驱动的是挂在真实串口上的那个模拟器——最简单的方式是把 `cli.repl()`/`run_scenario()` 需要执行的命令直接在 `server.py` 侧也接一份（后续可以扩展 `server.py` 支持从标准输入接控制台命令，与串口收发跑在同一个 `Device` 上；当前版本先满足"协议 + 模型"核心链路，这条留在下一阶段接线）。
+```
+soc 80                 # 界面 SOC 跳到 80%，单体电压随 OCV 曲线上移
+current -1500          # 1.5A 放电，界面电流变 -1.50A
+fault inject cell_overvoltage
+help                   # 完整命令列表（与 cli.py REPL 同一套解释器）
+quit                   # 只退出控制台，串口服务继续；Ctrl+C 停整个 server
+```
 
-单独跑控制台（脱离真实串口，用于本地快速试验命令和场景文件是否符合预期）：
+纯自动化场景（stdin 不是终端、不想起控制台线程）用 `--no-interactive` 关闭。
+线程安全：串口线程的 `handle_request()` 与控制台命令都收口在 `Device` 的同一把 `RLock` 内。
+
+## 用控制台驱动模拟器（脱离真实串口）
+
+`cli.py` 单独跑是不接串口的"空跑"模式，用于本地快速试验命令和场景文件是否符合预期（与 server 控制台共用同一套命令解释器 `cli.handle_command`）：
 
 ```bash
 python -m bms_sim.cli
