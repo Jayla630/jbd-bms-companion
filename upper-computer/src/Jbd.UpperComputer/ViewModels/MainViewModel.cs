@@ -52,6 +52,7 @@ public class MainViewModel : BindableBase, IDisposable
         _dispatcher = Application.Current.Dispatcher;
         _client.BasicInfoReceived += OnBasicInfoReceived;
         _client.CellVoltagesReceived += OnCellVoltagesReceived;
+        _client.ResponseTimedOut += OnResponseTimedOut;
 
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
         ConnectCommand = new DelegateCommand(Connect, CanConnect)
@@ -170,7 +171,6 @@ public class MainViewModel : BindableBase, IDisposable
             _client.Connect(SelectedPort!, BaudRate);
             ErrorMessage = null;
             ConnectionState = ConnectionState.Connected;
-            _client.SendRead(JbdFrame.RegBasicInfo);
         }
         catch (Exception ex)
         {
@@ -188,6 +188,18 @@ public class MainViewModel : BindableBase, IDisposable
     {
         _client.BasicInfoReceived -= OnBasicInfoReceived;
         _client.CellVoltagesReceived -= OnCellVoltagesReceived;
+        _client.ResponseTimedOut -= OnResponseTimedOut;
+    }
+
+    private void OnResponseTimedOut()
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            if (IsConnected)
+            {
+                ConnectionState = ConnectionState.Timeout;
+            }
+        });
     }
 
     /// <summary>串口线程 → Dispatcher marshal 回 UI 线程后才碰绑定属性（硬约束 4.3）。</summary>
