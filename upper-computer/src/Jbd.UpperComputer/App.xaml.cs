@@ -1,4 +1,5 @@
 using System.Windows;
+using Jbd.UpperComputer.Services;
 using Jbd.UpperComputer.ViewModels;
 using Jbd.UpperComputer.Views;
 using Prism.DryIoc;
@@ -13,6 +14,7 @@ public partial class App : PrismApplication
 
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
+        containerRegistry.RegisterSingleton<ISerialBmsClient, SerialBmsClient>();
         ViewModelLocationProvider.Register<MainWindow, MainViewModel>();
     }
 }
