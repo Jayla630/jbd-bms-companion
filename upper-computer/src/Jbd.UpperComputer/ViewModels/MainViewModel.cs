@@ -50,6 +50,10 @@ public class MainViewModel : BindableBase, IDisposable
     private bool _balanceOn;
     private bool _pendingBalanceRequest;
     private bool _isMosLocked;
+    private bool _unlockInProgress;
+    private int _unlockStep;
+    private string? _unlockStatusMessage;
+    private bool _unlockSucceeded;
 
     public MainViewModel(ISerialBmsClient client)
     {
@@ -59,12 +63,19 @@ public class MainViewModel : BindableBase, IDisposable
         _client.CellVoltagesReceived += OnCellVoltagesReceived;
         _client.WriteAcknowledged += OnWriteAcknowledged;
         _client.ResponseTimedOut += OnResponseTimedOut;
+        _client.MosUnlockProgressed += OnMosUnlockProgressed;
+        _client.MosUnlockCompleted += OnMosUnlockCompleted;
 
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
         ConnectCommand = new DelegateCommand(Connect, CanConnect)
             .ObservesProperty(() => SelectedPort)
             .ObservesProperty(() => ConnectionState);
         DisconnectCommand = new DelegateCommand(Disconnect, () => IsConnected)
+            .ObservesProperty(() => ConnectionState);
+        UnlockMosCommand = new DelegateCommand(UnlockMos,
+                () => IsMosLocked && !UnlockInProgress && IsConnected)
+            .ObservesProperty(() => IsMosLocked)
+            .ObservesProperty(() => UnlockInProgress)
             .ObservesProperty(() => ConnectionState);
         RefreshPorts();
     }
@@ -82,6 +93,8 @@ public class MainViewModel : BindableBase, IDisposable
     public DelegateCommand ConnectCommand { get; }
 
     public DelegateCommand DisconnectCommand { get; }
+
+    public DelegateCommand UnlockMosCommand { get; }
 
     public string? SelectedPort
     {
@@ -212,8 +225,8 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
-    /// <summary>保护状态 bit12：MOS 软件锁定。锁定时写 0xE1 会被设备静默拒绝，
-    /// 本切片只识别并醒目提示（开关保留可拨以演示回读弹回），不做引导式解锁。</summary>
+    /// <summary>保护状态 bit12：MOS 软件锁定。锁定时写 0xE1 会被设备静默拒绝；
+    /// 锁定态下"解锁 MOS"按钮可用（引导式三步解锁），横幅是否消失一律由 0x03 回读驱动。</summary>
     public bool IsMosLocked
     {
         get => _isMosLocked;
@@ -224,6 +237,36 @@ public class MainViewModel : BindableBase, IDisposable
                 RaisePropertyChanged(nameof(HasNoProtections));
             }
         }
+    }
+
+    /// <summary>解锁序列进行中（按钮禁用防重复点，进度文本可见）。</summary>
+    public bool UnlockInProgress
+    {
+        get => _unlockInProgress;
+        private set
+        {
+            if (SetProperty(ref _unlockInProgress, value))
+            {
+                RaisePropertyChanged(nameof(UnlockProgressText));
+            }
+        }
+    }
+
+    /// <summary>三步握手进度：每收到一步 ack 从 1/3 推进到 3/3。</summary>
+    public string UnlockProgressText =>
+        UnlockInProgress ? $"解锁中 {_unlockStep}/{JbdMosControl.UnlockStepCount}…" : string.Empty;
+
+    /// <summary>解锁结果反馈（成功/失败原因），由客户端按 0x03 回读裁决后给出。</summary>
+    public string? UnlockStatusMessage
+    {
+        get => _unlockStatusMessage;
+        private set => SetProperty(ref _unlockStatusMessage, value);
+    }
+
+    public bool UnlockSucceeded
+    {
+        get => _unlockSucceeded;
+        private set => SetProperty(ref _unlockSucceeded, value);
     }
 
     public bool HasNoProtections => ActiveProtections.Count == 0;
@@ -264,6 +307,46 @@ public class MainViewModel : BindableBase, IDisposable
     {
         _client.Disconnect();
         ConnectionState = ConnectionState.Disconnected;
+        ResetUnlockUi(); // 客户端已丢弃进行中的序列，重连后可从第一步重跑
+    }
+
+    /// <summary>一键触发三步解锁：发送顺序与步进都在客户端/协议层，这里只管展示。UI 线程调用。</summary>
+    private void UnlockMos()
+    {
+        _unlockStep = 0;
+        UnlockStatusMessage = null;
+        UnlockInProgress = true;
+        RaisePropertyChanged(nameof(UnlockProgressText));
+        _client.UnlockMos();
+    }
+
+    private void ResetUnlockUi()
+    {
+        _unlockStep = 0;
+        UnlockInProgress = false;
+        UnlockStatusMessage = null;
+    }
+
+    private void OnMosUnlockProgressed(int step)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            _unlockStep = step;
+            RaisePropertyChanged(nameof(UnlockProgressText));
+        });
+    }
+
+    /// <summary>成败由 0x03 回读裁决（客户端保证），这里只呈现结果；
+    /// 横幅消失、开关放开同样等回读驱动，不在此乐观清除。</summary>
+    private void OnMosUnlockCompleted(bool success, string message)
+    {
+        _dispatcher.BeginInvoke(() =>
+        {
+            _unlockStep = 0;
+            UnlockInProgress = false;
+            UnlockSucceeded = success;
+            UnlockStatusMessage = message;
+        });
     }
 
     public void Dispose()
@@ -272,6 +355,8 @@ public class MainViewModel : BindableBase, IDisposable
         _client.CellVoltagesReceived -= OnCellVoltagesReceived;
         _client.WriteAcknowledged -= OnWriteAcknowledged;
         _client.ResponseTimedOut -= OnResponseTimedOut;
+        _client.MosUnlockProgressed -= OnMosUnlockProgressed;
+        _client.MosUnlockCompleted -= OnMosUnlockCompleted;
     }
 
     /// <summary>
