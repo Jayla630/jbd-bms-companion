@@ -18,6 +18,9 @@ public static class JbdMosControl
     /// <summary>0xE2 均衡开关 2 字节数据：非 0 即开（与 simulator device.py 对拍）。</summary>
     public static byte[] BuildBalanceData(bool on) => [0x00, (byte)(on ? 0x01 : 0x00)];
 
+    /// <summary>解锁序列固定三步（<see cref="BuildUnlockSequence"/>）。</summary>
+    public const int UnlockStepCount = 3;
+
     /// <summary>
     /// bit12 软件锁定的引导式解锁序列：按序返回三个 0xE1 控制字（各 2 字节大端）。
     /// 顺序是命门，与 simulator faults.py 的 MosController 状态机对拍——错序写入被

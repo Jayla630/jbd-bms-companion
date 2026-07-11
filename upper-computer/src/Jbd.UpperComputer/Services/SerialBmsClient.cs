@@ -28,6 +28,12 @@ public sealed class SerialBmsClient : ISerialBmsClient
     private byte[]? _inFlightFrame;
     private DateTime _inFlightSentUtc;
 
+    // --- bit12 引导式解锁状态（都在 _sync 内读写）。三条写帧按引用识别，
+    // --- 与用户手拨开关产生的普通 0xE1 写区分开，互不干扰步数推进。
+    private byte[][]? _unlockFrames;
+    private int _unlockAckedSteps;
+    private bool _unlockAwaitingReadback;
+
     public SerialBmsClient()
     {
         _pollTimer.Elapsed += (_, _) => OnPollTick();
@@ -41,6 +47,12 @@ public sealed class SerialBmsClient : ISerialBmsClient
     public event Action<byte, bool>? WriteAcknowledged;
 
     public event Action? ResponseTimedOut;
+
+    /// <summary>解锁序列推进：第 step 步（1..3）的写 ack 已受理。串口线程触发。</summary>
+    public event Action<int>? MosUnlockProgressed;
+
+    /// <summary>解锁序列结束：(成功与否, 说明)。成败以 0x03 回读为准，不以 ack 收齐为准。后台线程触发。</summary>
+    public event Action<bool, string>? MosUnlockCompleted;
 
     public bool IsOpen
     {
@@ -72,6 +84,7 @@ public sealed class SerialBmsClient : ISerialBmsClient
             _accumulator.Clear();
             _queue.Clear();
             _inFlightFrame = null;
+            ResetUnlockLocked();
             _port = port;
 
             EnqueueReadsLocked(); // 不等第一个定时周期，立刻发起首轮读
@@ -90,6 +103,7 @@ public sealed class SerialBmsClient : ISerialBmsClient
         {
             _queue.Clear();
             _inFlightFrame = null;
+            ResetUnlockLocked(); // 断开即丢弃进行中的解锁，重连后可从第一步重跑（幂等）
             port = _port;
             _port = null;
         }
@@ -120,6 +134,32 @@ public sealed class SerialBmsClient : ISerialBmsClient
         => EnqueueAndPump(JbdFrame.BuildWrite(
             JbdFrame.RegBalanceControl, JbdMosControl.BuildBalanceData(on)));
 
+    /// <summary>
+    /// 启动 bit12 引导式解锁：三条 0xE1 写按序入队走命令泵，一次一条、收 ack 再发下一条。
+    /// 常规轮询读穿插其间不影响——设备端解锁状态机只由 0xE1 写值推进（simulator device.py：
+    /// 读寄存器不触碰 MosController），无需暂停轮询。序列进行中重复调用被忽略。
+    /// </summary>
+    public void UnlockMos()
+    {
+        lock (_sync)
+        {
+            if (_port is not { IsOpen: true } || _unlockFrames is not null || _unlockAwaitingReadback)
+            {
+                return;
+            }
+
+            _unlockAckedSteps = 0;
+            _unlockFrames = [.. JbdMosControl.BuildUnlockSequence()
+                .Select(data => JbdFrame.BuildWrite(JbdFrame.RegMosControl, data))];
+            foreach (byte[] frame in _unlockFrames)
+            {
+                _queue.Enqueue(frame);
+            }
+
+            PumpLocked();
+        }
+    }
+
     public void Dispose()
     {
         Disconnect();
@@ -144,6 +184,7 @@ public sealed class SerialBmsClient : ISerialBmsClient
     private void OnPollTick()
     {
         bool timedOut = false;
+        int unlockTimedOutStep = 0;
         lock (_sync)
         {
             if (_port is not { IsOpen: true })
@@ -154,6 +195,12 @@ public sealed class SerialBmsClient : ISerialBmsClient
             if (_inFlightFrame is not null &&
                 (DateTime.UtcNow - _inFlightSentUtc).TotalMilliseconds > CommandTimeoutMs)
             {
+                if (IsUnlockFrameLocked(_inFlightFrame))
+                {
+                    unlockTimedOutStep = _unlockAckedSteps + 1;
+                    AbortUnlockLocked();
+                }
+
                 _inFlightFrame = null;
                 timedOut = true;
             }
@@ -169,6 +216,11 @@ public sealed class SerialBmsClient : ISerialBmsClient
         if (timedOut)
         {
             ResponseTimedOut?.Invoke();
+        }
+
+        if (unlockTimedOutStep > 0)
+        {
+            MosUnlockCompleted?.Invoke(false, $"第 {unlockTimedOutStep}/3 步超时未应答，解锁中止");
         }
     }
 
@@ -238,32 +290,130 @@ public sealed class SerialBmsClient : ISerialBmsClient
     private void RouteFrame(byte[] frame)
     {
         byte echoRegister = frame[1];
+        bool ackIsUnlockStep = false;
         lock (_sync)
         {
             // 请求帧寄存器在偏移 2；回显匹配在途命令即视为其应答，泵推进下一条
             if (_inFlightFrame is not null && _inFlightFrame[2] == echoRegister)
             {
+                ackIsUnlockStep = IsUnlockFrameLocked(_inFlightFrame);
                 _inFlightFrame = null;
             }
         }
 
-        switch (echoRegister)
+        if (ackIsUnlockStep)
         {
-            case JbdFrame.RegBasicInfo when JbdFrame.TryParseBasicInfo(frame, out var info):
-                BasicInfoReceived?.Invoke(info!);
-                break;
-            case JbdFrame.RegCellVoltages when JbdFrame.TryParseCellVoltages(frame, out var cells):
-                CellVoltagesReceived?.Invoke(cells!);
-                break;
-            case JbdFrame.RegMosControl or JbdFrame.RegBalanceControl
-                when JbdFrame.TryParseWriteAck(frame, echoRegister, out bool accepted):
-                WriteAcknowledged?.Invoke(echoRegister, accepted);
-                break;
+            // 解锁步骤的 ack 只推进解锁状态机，不进 WriteAcknowledged（避免和普通写提示混流）。
+            // 帧结构坏/被拒都算该步失败——绝不带伤继续下一步。
+            bool stepOk = JbdFrame.TryParseWriteAck(frame, JbdFrame.RegMosControl, out bool accepted)
+                && accepted;
+            HandleUnlockStepAck(stepOk);
+        }
+        else
+        {
+            switch (echoRegister)
+            {
+                case JbdFrame.RegBasicInfo when JbdFrame.TryParseBasicInfo(frame, out var info):
+                    HandleUnlockReadback(info!);
+                    BasicInfoReceived?.Invoke(info!);
+                    break;
+                case JbdFrame.RegCellVoltages when JbdFrame.TryParseCellVoltages(frame, out var cells):
+                    CellVoltagesReceived?.Invoke(cells!);
+                    break;
+                case JbdFrame.RegMosControl or JbdFrame.RegBalanceControl
+                    when JbdFrame.TryParseWriteAck(frame, echoRegister, out bool accepted):
+                    WriteAcknowledged?.Invoke(echoRegister, accepted);
+                    break;
+            }
         }
 
         lock (_sync)
         {
             PumpLocked();
         }
+    }
+
+    /// <summary>解锁帧按引用识别（三条帧在 UnlockMos 里一次性构建）。_sync 内调用。</summary>
+    private bool IsUnlockFrameLocked(byte[] frame)
+        => _unlockFrames is not null && Array.IndexOf(_unlockFrames, frame) >= 0;
+
+    /// <summary>中止解锁：丢弃队列里还没发出的解锁帧，清空序列状态。_sync 内调用。</summary>
+    private void AbortUnlockLocked()
+    {
+        if (_unlockFrames is not null)
+        {
+            byte[][] rest = [.. _queue.Where(f => Array.IndexOf(_unlockFrames, f) < 0)];
+            _queue.Clear();
+            foreach (byte[] frame in rest)
+            {
+                _queue.Enqueue(frame);
+            }
+        }
+
+        ResetUnlockLocked();
+    }
+
+    private void ResetUnlockLocked()
+    {
+        _unlockFrames = null;
+        _unlockAckedSteps = 0;
+        _unlockAwaitingReadback = false;
+    }
+
+    private void HandleUnlockStepAck(bool accepted)
+    {
+        int step;
+        lock (_sync)
+        {
+            if (_unlockFrames is null)
+            {
+                return; // 断开/中止竞态：序列已被清理
+            }
+
+            if (!accepted)
+            {
+                step = _unlockAckedSteps + 1;
+                AbortUnlockLocked();
+            }
+            else
+            {
+                step = ++_unlockAckedSteps;
+                if (step == JbdMosControl.UnlockStepCount)
+                {
+                    // 三条 ack 收齐 ≠ 成功：转入等待下一帧 0x03 回读判成败
+                    _unlockFrames = null;
+                    _unlockAwaitingReadback = true;
+                }
+            }
+        }
+
+        if (!accepted)
+        {
+            MosUnlockCompleted?.Invoke(false, $"第 {step}/3 步被设备拒绝，解锁中止");
+            return;
+        }
+
+        MosUnlockProgressed?.Invoke(step);
+    }
+
+    /// <summary>三条 ack 收齐后的第一帧 0x03 回读给出最终裁决：bit12=0 且两路 FET 均开才算成功。</summary>
+    private void HandleUnlockReadback(BasicInfo info)
+    {
+        lock (_sync)
+        {
+            if (!_unlockAwaitingReadback)
+            {
+                return;
+            }
+
+            _unlockAwaitingReadback = false;
+        }
+
+        bool unlocked = !info.MosSoftwareLocked && info.ChargeMosOn && info.DischargeMosOn;
+        MosUnlockCompleted?.Invoke(
+            unlocked,
+            unlocked
+                ? "解锁成功：回读确认 bit12 已清零，两路 MOS 均开"
+                : "回读未确认解锁（bit12 仍置位或 FET 未全开），请重试");
     }
 }
