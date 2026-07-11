@@ -49,6 +49,7 @@ public class MainViewModel : BindableBase, IDisposable
     private bool _dischargeMosOn;
     private bool _balanceOn;
     private bool _pendingBalanceRequest;
+    private bool _isMosLocked;
 
     public MainViewModel(ISerialBmsClient client)
     {
@@ -72,6 +73,9 @@ public class MainViewModel : BindableBase, IDisposable
 
     public ObservableCollection<CellReading> Cells { get; } =
         [new(1), new(2), new(3), new(4)];
+
+    /// <summary>当前置位的保护项可读标签（映射逻辑在 Jbd.Protocol，UI 只展示）。</summary>
+    public ObservableCollection<string> ActiveProtections { get; } = [];
 
     public DelegateCommand RefreshPortsCommand { get; }
 
@@ -208,6 +212,22 @@ public class MainViewModel : BindableBase, IDisposable
         }
     }
 
+    /// <summary>保护状态 bit12：MOS 软件锁定。锁定时写 0xE1 会被设备静默拒绝，
+    /// 本切片只识别并醒目提示（开关保留可拨以演示回读弹回），不做引导式解锁。</summary>
+    public bool IsMosLocked
+    {
+        get => _isMosLocked;
+        private set
+        {
+            if (SetProperty(ref _isMosLocked, value))
+            {
+                RaisePropertyChanged(nameof(HasNoProtections));
+            }
+        }
+    }
+
+    public bool HasNoProtections => ActiveProtections.Count == 0;
+
     private bool IsConnected => ConnectionState != ConnectionState.Disconnected;
 
     private void RefreshPorts()
@@ -302,6 +322,7 @@ public class MainViewModel : BindableBase, IDisposable
             CurrentA = info.CurrentA;
             SocPercent = info.SocPercent;
             UpdateMosFromReadback(info);
+            UpdateProtections(info);
             LastUpdated = DateTime.Now;
             if (IsConnected)
             {
@@ -324,6 +345,24 @@ public class MainViewModel : BindableBase, IDisposable
             _dischargeMosOn = info.DischargeMosOn;
             RaisePropertyChanged(nameof(DischargeMosOn));
         }
+    }
+
+    /// <summary>保护面板与锁定标识只从 0x03 回读更新。UI 线程调用。</summary>
+    private void UpdateProtections(BasicInfo info)
+    {
+        var labels = JbdProtectionStatus.GetActiveLabels(info.ProtectionStatus);
+        if (!labels.SequenceEqual(ActiveProtections))
+        {
+            ActiveProtections.Clear();
+            foreach (string label in labels)
+            {
+                ActiveProtections.Add(label);
+            }
+
+            RaisePropertyChanged(nameof(HasNoProtections));
+        }
+
+        IsMosLocked = info.MosSoftwareLocked;
     }
 
     private void OnCellVoltagesReceived(CellVoltages cells)

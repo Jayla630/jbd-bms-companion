@@ -12,6 +12,7 @@
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
@@ -55,8 +56,23 @@
                 Text="{Binding ConnectionStateText}" />
         </DockPanel>
 
+        <!--  MOS 软件锁定醒目横幅（bit12）  -->
+        <Border
+            Grid.Row="1"
+            Margin="0,8,0,0"
+            Padding="8,4"
+            Background="Firebrick"
+            CornerRadius="3"
+            Visibility="{Binding IsMosLocked, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock
+                FontSize="15"
+                FontWeight="Bold"
+                Foreground="White"
+                Text="⚠ MOS 软件锁定（bit12）：充放电开关写入将被设备拒绝，需按固定顺序解锁（本版本仅提示）" />
+        </Border>
+
         <!--  数据区：总电压 / 电流 / SOC + 单体电压 + 控制/保护  -->
-        <Grid Grid.Row="1" Margin="0,16,0,0">
+        <Grid Grid.Row="2" Margin="0,16,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="*" />
@@ -131,13 +147,47 @@
                             Foreground="Gray"
                             Text="开关显示设备实际状态，拨动后等下一轮回读确认"
                             TextWrapping="Wrap" />
+                        <TextBlock
+                            Margin="0,2,0,0"
+                            FontSize="11"
+                            FontWeight="Bold"
+                            Foreground="Firebrick"
+                            Text="当前处于软件锁定：写入会被拒绝，开关将弹回"
+                            TextWrapping="Wrap"
+                            Visibility="{Binding IsMosLocked, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                    </StackPanel>
+                </GroupBox>
+
+                <GroupBox
+                    Margin="0,12,0,0"
+                    Padding="8"
+                    Header="保护状态">
+                    <StackPanel>
+                        <TextBlock
+                            FontSize="16"
+                            FontWeight="Bold"
+                            Foreground="ForestGreen"
+                            Text="正常"
+                            Visibility="{Binding HasNoProtections, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <ItemsControl ItemsSource="{Binding ActiveProtections}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock
+                                        Margin="0,2"
+                                        FontSize="15"
+                                        FontWeight="Bold"
+                                        Foreground="Firebrick"
+                                        Text="{Binding StringFormat=● {0}}" />
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </StackPanel>
                 </GroupBox>
             </StackPanel>
         </Grid>
 
         <!--  状态栏：最后刷新时间 + 错误信息  -->
-        <DockPanel Grid.Row="2" Margin="0,8,0,0">
+        <DockPanel Grid.Row="3" Margin="0,8,0,0">
             <TextBlock Foreground="Gray" Text="{Binding LastUpdatedText}" />
             <TextBlock
                 Margin="16,0,0,0"
