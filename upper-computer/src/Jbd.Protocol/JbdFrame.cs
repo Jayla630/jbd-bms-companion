@@ -8,10 +8,13 @@ public static class JbdFrame
     public const byte Start = 0xDD;
     public const byte End = 0x77;
     public const byte OpRead = 0xA5;
+    public const byte OpWrite = 0x5A;
     public const byte StatusOk = 0x00;
 
     public const byte RegBasicInfo = 0x03;
     public const byte RegCellVoltages = 0x04;
+    public const byte RegMosControl = 0xE1;
+    public const byte RegBalanceControl = 0xE2;
 
     /// <summary>响应帧总长 = 长度字段 + 7（DD reg status len [data] csum_hi csum_lo 77）。</summary>
     public const int ResponseOverhead = 7;
@@ -26,6 +29,33 @@ public static class JbdFrame
             (byte)(checksum >> 8), (byte)(checksum & 0xFF),
             End,
         ];
+    }
+
+    /// <summary>构建写命令帧（DD 5A reg len data csum 77）。0xE1/0xE2 无需先进配置模式，可直接写。</summary>
+    public static byte[] BuildWrite(byte register, ReadOnlySpan<byte> data)
+    {
+        ushort checksum = JbdChecksum.ComputeRequest(register, data);
+        byte[] frame = new byte[data.Length + 7];
+        frame[0] = Start;
+        frame[1] = OpWrite;
+        frame[2] = register;
+        frame[3] = (byte)data.Length;
+        data.CopyTo(frame.AsSpan(4));
+        frame[^3] = (byte)(checksum >> 8);
+        frame[^2] = (byte)(checksum & 0xFF);
+        frame[^1] = End;
+        return frame;
+    }
+
+    /// <summary>
+    /// 解析写响应 ack。返回 true = 帧结构合法（含校验和）；accepted = 状态字 0x00（设备受理）。
+    /// 状态 0x80 等非 0 值是"设备拒绝"，帧合法但 accepted=false，不抛异常。
+    /// </summary>
+    public static bool TryParseWriteAck(ReadOnlySpan<byte> frame, byte expectedRegister, out bool accepted)
+    {
+        bool valid = TryGetResponse(frame, expectedRegister, out byte status, out _);
+        accepted = valid && status == StatusOk;
+        return valid;
     }
 
     /// <summary>解析 0x03 基础信息响应帧。校验不过或字段不完整返回 false。</summary>
@@ -67,16 +97,17 @@ public static class JbdFrame
     }
 
     /// <summary>
-    /// 校验响应帧的公共骨架：起始/结束码、寄存器回显、状态 0x00、长度字段与实际一致、校验和匹配。
-    /// 全部通过时给出数据区切片。
+    /// 校验响应帧的公共骨架（状态无关）：起始/结束码、寄存器回显、长度字段与实际一致、
+    /// 校验和匹配（校验和覆盖含实际状态字节，0x80 拒绝帧同样能过结构校验）。
     /// </summary>
-    private static bool TryGetResponseData(
-        ReadOnlySpan<byte> frame, byte expectedRegister, out ReadOnlySpan<byte> data)
+    private static bool TryGetResponse(
+        ReadOnlySpan<byte> frame, byte expectedRegister, out byte status, out ReadOnlySpan<byte> data)
     {
+        status = 0;
         data = default;
         if (frame.Length < ResponseOverhead ||
             frame[0] != Start || frame[^1] != End ||
-            frame[1] != expectedRegister || frame[2] != StatusOk ||
+            frame[1] != expectedRegister ||
             frame[3] != frame.Length - ResponseOverhead)
         {
             return false;
@@ -89,9 +120,15 @@ public static class JbdFrame
             return false;
         }
 
+        status = frame[2];
         data = payload;
         return true;
     }
+
+    /// <summary>读响应骨架：结构合法且状态字必须为 0x00（非 0 视为设备报错帧）。</summary>
+    private static bool TryGetResponseData(
+        ReadOnlySpan<byte> frame, byte expectedRegister, out ReadOnlySpan<byte> data)
+        => TryGetResponse(frame, expectedRegister, out byte status, out data) && status == StatusOk;
 
     private static ushort ReadUInt16(ReadOnlySpan<byte> data, int offset)
         => (ushort)((data[offset] << 8) | data[offset + 1]);
