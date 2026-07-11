@@ -11,15 +11,15 @@ from .faults import ProtectionBit
 
 
 def print_status(device: Device) -> None:
-    device._advance()
-    temps = ", ".join(f"{t:.1f}" for t in device.thermal.ntc_temperatures_c)
+    snap = device.status_snapshot()
+    temps = ", ".join(f"{t:.1f}" for t in snap["temperatures_c"])
     print(
-        f"总压={device.battery.total_voltage_v:.2f}V "
-        f"电流={device.battery.current_ma:.0f}mA "
-        f"SOC={device.battery.average_soc_percent:.1f}% "
+        f"总压={snap['total_voltage_v']:.2f}V "
+        f"电流={snap['current_ma']:.0f}mA "
+        f"SOC={snap['soc_percent']:.1f}% "
         f"温度=[{temps}]℃ "
-        f"保护=0x{device.faults.protection_status:04X} "
-        f"MOS(充/放)={device.mos.charge_enabled}/{device.mos.discharge_enabled}"
+        f"保护=0x{snap['protection_status']:04X} "
+        f"MOS(充/放)={snap['mos_charge_on']}/{snap['mos_discharge_on']}"
     )
 
 
@@ -33,20 +33,20 @@ def handle_command(device: Device, line: str) -> bool:
     if cmd in ("quit", "exit"):
         return False
     if cmd == "current" and len(parts) == 2:
-        device.battery.set_current_ma(float(parts[1]))
+        device.set_current_ma(float(parts[1]))
     elif cmd == "soc" and len(parts) == 2:
-        device.battery.set_soc_percent(float(parts[1]))
+        device.set_soc_percent(float(parts[1]))
     elif cmd == "fault" and len(parts) == 3 and parts[1] in ("inject", "clear"):
         bit = ProtectionBit[parts[2].upper()]
         if parts[1] == "inject":
-            device.faults.inject(bit)
+            device.inject_fault(bit)
         else:
-            device.faults.clear(bit)
+            device.clear_fault(bit)
     elif cmd == "mos" and len(parts) == 2:
         value = int(parts[1], 0)
-        device.mos.write_control(close_discharge=bool(value & 0x01), close_charge=bool(value & 0x02))
+        device.write_mos_control(close_discharge=bool(value & 0x01), close_charge=bool(value & 0x02))
     elif cmd == "temp" and len(parts) == 2:
-        device.thermal.core_temp_c = float(parts[1])
+        device.set_core_temp_c(float(parts[1]))
     elif cmd == "scenario" and len(parts) == 2:
         run_scenario(device, parts[1])
     elif cmd == "status":

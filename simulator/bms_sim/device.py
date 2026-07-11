@@ -6,7 +6,7 @@ from datetime import date
 
 from . import protocol as proto
 from .battery import DEFAULT_RATED_CAPACITY_MAH, BatteryPack, ThermalModel
-from .faults import FaultManager, MosController
+from .faults import FaultManager, MosController, ProtectionBit
 
 DEVICE_NAME = "JBD-SP04S010-Sim"
 DEFAULT_PRODUCTION_DATE = date(2022, 3, 28)
@@ -47,6 +47,40 @@ class Device:
             current_ma=current_ma,
             dt_seconds=dt,
         )
+
+    # --- 控制台命令入口：外部（cli/server 控制台）改状态一律走这些方法，
+    # --- 不要直接戳 battery/faults/mos/thermal，线程安全靠这层收口保证。
+
+    def set_current_ma(self, value: float) -> None:
+        self.battery.set_current_ma(value)
+
+    def set_soc_percent(self, value: float) -> None:
+        self.battery.set_soc_percent(value)
+
+    def inject_fault(self, bit: ProtectionBit) -> None:
+        self.faults.inject(bit)
+
+    def clear_fault(self, bit: ProtectionBit) -> None:
+        self.faults.clear(bit)
+
+    def write_mos_control(self, *, close_discharge: bool, close_charge: bool) -> None:
+        self.mos.write_control(close_discharge=close_discharge, close_charge=close_charge)
+
+    def set_core_temp_c(self, value: float) -> None:
+        self.thermal.core_temp_c = value
+
+    def status_snapshot(self) -> dict:
+        """推进模型后取一份状态快照（控制台展示用）。"""
+        self._advance()
+        return {
+            "total_voltage_v": self.battery.total_voltage_v,
+            "current_ma": self.battery.current_ma,
+            "soc_percent": self.battery.average_soc_percent,
+            "temperatures_c": list(self.thermal.ntc_temperatures_c),
+            "protection_status": self.faults.protection_status,
+            "mos_charge_on": self.mos.charge_enabled,
+            "mos_discharge_on": self.mos.discharge_enabled,
+        }
 
     def handle_request(self, frame: proto.RequestFrame) -> bytes:
         self._advance()
