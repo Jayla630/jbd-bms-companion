@@ -1,0 +1,62 @@
+/* ===== 设计 Token（源自 Claude Design 原型 :root，px×2=rpx）===== */
+page {
+  --color-normal: #0ba060;
+  --bg-normal: #e9f7ef;
+  --border-normal: #c9e9d8;
+  --color-info: #2e6be6;
+  --bg-info: #eaf1fe;
+  --border-info: #d6e2fb;
+  --color-warning: #e8960c;
+  --bg-warning: #fdf3e1;
+  --border-warning: #f4dfb8;
+  --color-danger: #e03131;
+  --bg-danger: #fdecec;
+  --border-danger: #f5c2c2;
+  --color-locked: #b45309;
+  --bg-locked: #fcf0dd;
+  --border-locked: #f0d9b0;
+  --color-offline: #9aa0a8;
+
+  --text-primary: #1a1e24;
+  --text-secondary: #6b7280;
+  --text-tertiary: #9aa0a8;
+  --text-faint: #c0c4cb;
+
+  --bg-page: #f2f2f2;
+  --bg-card: #ffffff;
+  --bg-inset: #f7f8fa;
+  --border-card: #ebedf0;
+  --divider: #f1f2f4;
+
+  --radius-card: 28rpx;
+  --radius-chip: 16rpx;
+  --radius-btn: 42rpx;
+  --shadow-card: 0 2rpx 6rpx rgba(17, 24, 39, 0.04);
+
+  --font-mono: 'IBM Plex Mono', Menlo, Consolas, monospace;
+
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', -apple-system,
+    'Helvetica Neue', sans-serif;
+  font-size: 28rpx;
+}
+
+/* ===== 通用卡片 ===== */
+.card {
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  border: 1rpx solid var(--border-card);
+  box-shadow: var(--shadow-card);
+}
+
+.page-body {
+  padding: 24rpx 24rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}

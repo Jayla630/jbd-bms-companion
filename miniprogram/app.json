@@ -1,0 +1,28 @@
+{
+  "pages": [
+    "pages/overview/overview",
+    "pages/control/control",
+    "pages/protection/protection",
+    "pages/connect/connect"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "总览",
+    "backgroundColor": "#F2F2F2",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#9AA0A8",
+    "selectedColor": "#0BA060",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      { "pagePath": "pages/overview/overview", "text": "总览" },
+      { "pagePath": "pages/control/control", "text": "控制" },
+      { "pagePath": "pages/protection/protection", "text": "保护" }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}
