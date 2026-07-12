@@ -1,0 +1,14 @@
+<view class="row">
+  <view class="icon {{mine ? 'mine' : ''}}">
+    <text class="bt {{mine ? 'mine' : ''}}">ᛒ</text>
+  </view>
+  <view class="info">
+    <text class="name">{{name}}</text>
+    <text class="sub {{subCls}}">{{sub}}</text>
+  </view>
+  <text wx:if="{{state === 'connected'}}" class="disc" bindtap="onDisconnect">断开</text>
+  <view class="btn {{btnCls}}" bindtap="onBtnTap">
+    <view wx:if="{{spinning}}" class="spinner"></view>
+    <text>{{btnText}}</text>
+  </view>
+</view>

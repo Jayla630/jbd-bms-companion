@@ -1,0 +1,20 @@
+<view class="card gauge">
+  <view class="head">
+    <text class="label">电量 SOC</text>
+    <text class="pack">JBD 4S 30A · EVE 25P ×4</text>
+  </view>
+  <view class="big {{tone}}">
+    <text class="num mono">{{soc}}</text>
+    <text class="pct mono">%</text>
+  </view>
+  <view class="bar-row">
+    <view class="bar">
+      <view class="fill {{tone}}" style="width: {{soc}}%"></view>
+    </view>
+    <view class="tip"></view>
+  </view>
+  <view class="foot">
+    <text>剩余容量 <text class="mono strong">约 {{remainMah}} mAh</text> / {{designCapacity}} mAh</text>
+    <text>循环 <text class="mono strong">{{cycleCount}}</text> 次</text>
+  </view>
+</view>

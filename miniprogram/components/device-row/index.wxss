@@ -1,0 +1,117 @@
+.row {
+  padding: 28rpx 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.icon {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 20rpx;
+  background: #f2f3f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.icon.mine {
+  background: var(--bg-normal);
+}
+
+.bt {
+  font-size: 36rpx;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.bt.mine {
+  color: var(--color-normal);
+}
+
+.info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.name {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.sub {
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+}
+
+.sub.mono {
+  font-family: var(--font-mono);
+}
+
+.sub.info {
+  color: var(--color-info);
+}
+
+.sub.danger {
+  color: var(--color-danger);
+}
+
+.disc {
+  font-size: 22rpx;
+  color: var(--text-secondary);
+  border: 1rpx solid #e0e2e6;
+  padding: 10rpx 20rpx;
+  border-radius: 24rpx;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+  padding: 12rpx 28rpx;
+  border-radius: 28rpx;
+  border: 1rpx solid transparent;
+}
+
+.btn.primary {
+  background: var(--color-normal);
+  color: #fff;
+}
+
+.btn.busy {
+  background: #a9c4f2;
+  color: #fff;
+}
+
+.btn.done {
+  background: var(--bg-normal);
+  color: var(--color-normal);
+}
+
+.btn.retry {
+  background: #fff;
+  color: var(--color-danger);
+  border-color: var(--border-danger);
+}
+
+.spinner {
+  width: 22rpx;
+  height: 22rpx;
+  border: 4rpx solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

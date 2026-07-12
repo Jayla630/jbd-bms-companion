@@ -1,0 +1,8 @@
+<view class="cell">
+  <text class="v mono {{accent}}">{{value}}</text>
+  <view class="tube">
+    <view class="fill {{accent}}" style="height: {{heightRpx}}rpx"></view>
+  </view>
+  <text class="label {{accent}}">{{label}}</text>
+  <text wx:if="{{balancing}}" class="badge">均衡</text>
+</view>

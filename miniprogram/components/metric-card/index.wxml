@@ -1,0 +1,5 @@
+<view class="metric">
+  <text class="label">{{label}}</text>
+  <text class="value mono {{tone}}">{{value}}<text class="unit"> {{unit}}</text></text>
+  <text wx:if="{{badge}}" class="badge {{tone}}">{{badge}}</text>
+</view>

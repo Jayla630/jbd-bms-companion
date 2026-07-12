@@ -1,0 +1,7 @@
+<view class="chip {{cls}}">
+  <view class="name-row">
+    <text class="name">{{label}}</text>
+    <text class="bit mono">b{{bit}}</text>
+  </view>
+  <text class="mark">{{mark}}</text>
+</view>

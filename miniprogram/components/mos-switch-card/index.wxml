@@ -1,0 +1,13 @@
+<view class="card sw {{trackCls === 'dis' ? 'faded' : ''}} {{trackCls === 'pend' ? 'pending' : ''}}">
+  <view class="text">
+    <text class="title">{{title}}</text>
+    <view class="sub {{subCls}}">
+      <view wx:if="{{pending}}" class="spinner"></view>
+      <text>{{sub1}}</text>
+      <text wx:if="{{sub2}}" class="sub2 {{subCls}}">{{sub2}}</text>
+    </view>
+  </view>
+  <view class="track {{trackCls}} {{knobOn ? 'end' : ''}}" bindtap="onTap">
+    <view class="knob"></view>
+  </view>
+</view>

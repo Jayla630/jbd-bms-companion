@@ -1,0 +1,57 @@
+.banner {
+  height: 68rpx;
+  background: var(--bg-card);
+  border-bottom: 1rpx solid #eceef1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32rpx;
+}
+
+.left {
+  font-size: 22rpx;
+  font-weight: 500;
+}
+
+.left.info {
+  color: var(--color-info);
+}
+
+.left.danger {
+  color: var(--color-danger);
+}
+
+.left.off {
+  color: var(--text-tertiary);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+}
+
+.dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dot.on {
+  background: var(--color-normal);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}

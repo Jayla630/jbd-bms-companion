@@ -1,0 +1,61 @@
+:host {
+  flex: 1;
+}
+
+.metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.label {
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+}
+
+.value {
+  font-size: 42rpx;
+  font-weight: 600;
+}
+
+.value.normal {
+  color: var(--color-normal);
+}
+
+.value.info {
+  color: var(--color-info);
+}
+
+.value.warning {
+  color: var(--color-warning);
+}
+
+.value.danger {
+  color: var(--color-danger);
+}
+
+.unit {
+  font-size: 22rpx;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+.badge {
+  font-size: 20rpx;
+  font-weight: 500;
+  padding: 2rpx 16rpx;
+  border-radius: 16rpx;
+  color: var(--text-secondary);
+  background: #f2f3f5;
+}
+
+.badge.normal {
+  color: var(--color-normal);
+  background: var(--bg-normal);
+}
+
+.badge.info {
+  color: var(--color-info);
+  background: var(--bg-info);
+}

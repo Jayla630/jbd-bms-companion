@@ -1,0 +1,73 @@
+<view wx:if="{{show}}" class="mask" bindtap="onCancel">
+  <view class="panel" catchtap="noop">
+    <view class="grip"></view>
+    <view class="head-row">
+      <view class="head-text">
+        <text class="title">解锁 MOS</text>
+        <text class="seq mono">命令序列 0x0003 → 0x0001 → 0x0000</text>
+      </view>
+      <text class="head-stage mono {{headCls}}">{{head}}</text>
+    </view>
+    <view class="bar">
+      <view class="bar-fill {{barCls}}" style="width: {{barW}}"></view>
+    </view>
+
+    <view class="steps">
+      <view wx:for="{{steps}}" wx:key="title" class="step">
+        <view class="dot {{item.cls}}">
+          <view wx:if="{{item.cls === 'sending'}}" class="ring"></view>
+          <text class="glyph">{{item.glyph}}</text>
+        </view>
+        <view class="step-text">
+          <text class="step-title {{item.cls}}">{{item.title}}</text>
+          <text class="step-sub mono {{item.cls}}">{{item.sub}}</text>
+        </view>
+      </view>
+
+      <view class="divider-row">
+        <view class="line"></view>
+        <text class="divider-label">最终裁决</text>
+        <view class="line"></view>
+      </view>
+
+      <view class="step">
+        <view class="dot {{aj.cls}}">
+          <view wx:if="{{aj.cls === 'sending'}}" class="ring"></view>
+          <text class="glyph">{{aj.glyph}}</text>
+        </view>
+        <view class="step-text">
+          <text class="step-title {{aj.cls}}">回读裁决 · 校验 bit12</text>
+          <text class="step-sub mono {{aj.cls}}">{{aj.sub}}</text>
+        </view>
+      </view>
+    </view>
+
+    <text class="hint">三步 ack 全部完成 ≠ 解锁成功,最终以回读 bit12 裁决。\n解锁过程请保持蓝牙连接。</text>
+
+    <view wx:if="{{foot === 'success'}}" class="result ok">
+      <text class="result-icon ok">✓</text>
+      <view class="result-text">
+        <text class="result-title ok">解锁成功</text>
+        <text class="result-sub ok">双 MOS 已恢复导通,输出正常</text>
+      </view>
+    </view>
+    <view wx:if="{{foot === 'fail'}}" class="result fail">
+      <text class="result-icon fail">✕</text>
+      <view class="result-text">
+        <text class="result-title fail">解锁失败</text>
+        <text class="result-sub fail">回读 bit12 仍为 1,可从头重新执行三步解锁</text>
+      </view>
+    </view>
+
+    <view wx:if="{{foot === 'run'}}" class="foot">
+      <view class="btn ghost" bindtap="onCancel">取消</view>
+    </view>
+    <view wx:if="{{foot === 'success'}}" class="foot">
+      <view class="btn primary" bindtap="onFinish">完成</view>
+    </view>
+    <view wx:if="{{foot === 'fail'}}" class="foot two">
+      <view class="btn ghost" bindtap="onCancel">关闭</view>
+      <view class="btn danger" bindtap="onRetry">重新解锁(从全关重跑)</view>
+    </view>
+  </view>
+</view>

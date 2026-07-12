@@ -1,0 +1,7 @@
+<view class="banner" bindtap="onTap">
+  <view class="left {{tone}}">{{text}}</view>
+  <view class="right">
+    <view class="dot {{dotOn ? 'on' : ''}}"></view>
+    <text>{{right}}</text>
+  </view>
+</view>

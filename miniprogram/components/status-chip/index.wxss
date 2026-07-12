@@ -1,0 +1,60 @@
+.chip {
+  border-radius: var(--radius-chip);
+  padding: 18rpx 22rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border: 1rpx solid transparent;
+  background: var(--bg-inset);
+}
+
+.name-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10rpx;
+}
+
+.name {
+  font-size: 24rpx;
+  color: var(--text-primary);
+}
+
+.bit {
+  font-size: 18rpx;
+  color: var(--text-faint);
+}
+
+.mark {
+  font-size: 18rpx;
+  color: var(--color-normal);
+}
+
+.chip.danger {
+  background: var(--bg-danger);
+  border-color: var(--border-danger);
+}
+
+.chip.danger .name,
+.chip.danger .mark {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.chip.danger .mark {
+  font-weight: 700;
+}
+
+.chip.locked {
+  background: var(--bg-locked);
+  border-color: var(--border-locked);
+}
+
+.chip.locked .name,
+.chip.locked .mark {
+  color: var(--color-locked);
+  font-weight: 600;
+}
+
+.chip.locked .mark {
+  font-weight: 700;
+}
