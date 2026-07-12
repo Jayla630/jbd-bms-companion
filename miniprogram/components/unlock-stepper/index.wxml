@@ -42,7 +42,10 @@
       </view>
     </view>
 
-    <text class="hint">三步 ack 全部完成 ≠ 解锁成功,最终以回读 bit12 裁决。\n解锁过程请保持蓝牙连接。</text>
+    <view class="hint">
+      <text>三步 ack 全部完成 ≠ 解锁成功,最终以回读 bit12 裁决。</text>
+      <text>解锁过程请保持蓝牙连接。</text>
+    </view>
 
     <view wx:if="{{foot === 'success'}}" class="result ok">
       <text class="result-icon ok">✓</text>

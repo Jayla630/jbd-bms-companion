@@ -1,1 +1,55 @@
-<view class="page-body">保护状态（骨架占位）</view>
+<view class="page-body">
+  <text wx:if="{{!connected}}" class="tip">未连接 · 以下为最近一次读取的状态</text>
+
+  <view wx:if="{{locked}}" class="lock-banner">
+    <view class="lock-head">
+      <view class="lock-icon">!</view>
+      <view class="lock-text">
+        <text class="lock-title">MOS 软件锁定已触发</text>
+        <text class="lock-sub mono">protection_status bit12 = 1 · 双 MOS 已关断</text>
+      </view>
+    </view>
+    <view class="unlock-btn" bindtap="openSheet">解锁 MOS</view>
+  </view>
+
+  <view class="card summary {{sum.cls}}">
+    <view class="sum-icon {{sum.cls}}">
+      <text wx:if="{{sum.icon === 'ok'}}" class="sum-glyph">✓</text>
+      <text wx:elif="{{sum.icon === 'err'}}" class="sum-glyph">!</text>
+      <text wx:else class="sum-glyph">🔒</text>
+    </view>
+    <view class="sum-text">
+      <text class="sum-title {{sum.cls}}">{{sum.title}}</text>
+      <text class="sum-sub">{{sum.sub}}</text>
+    </view>
+  </view>
+
+  <view class="mos-row">
+    <view class="mos-pill">充电 MOS <text class="mos-val {{mosC ? 'on' : locked ? 'locked' : ''}}">{{mosC ? '开' : '关'}}</text></view>
+    <view class="mos-pill">放电 MOS <text class="mos-val {{mosD ? 'on' : locked ? 'locked' : ''}}">{{mosD ? '开' : '关'}}</text></view>
+    <view class="mos-pill">触发 <text class="mos-val mono {{trigCount > 0 ? 'trig' : 'on'}}">{{trigCount}}</text></view>
+  </view>
+
+  <view class="card grid-card">
+    <block wx:for="{{groups}}" wx:key="name" wx:for-item="group">
+      <text class="group-label">{{group.name}}</text>
+      <view class="grid">
+        <status-chip
+          wx:for="{{group.items}}"
+          wx:key="bit"
+          label="{{item.label}}"
+          bit="{{item.bit}}"
+          active="{{item.active}}"
+        />
+      </view>
+    </block>
+  </view>
+</view>
+
+<unlock-stepper
+  show="{{sheetOn}}"
+  stage="{{unlockStage}}"
+  bind:cancel="onCancel"
+  bind:retry="onRetry"
+  bind:finish="onFinish"
+/>

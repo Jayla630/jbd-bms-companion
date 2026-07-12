@@ -1,4 +1,9 @@
 {
   "navigationBarTitleText": "总览",
-  "usingComponents": {}
+  "usingComponents": {
+    "connection-banner": "/components/connection-banner/index",
+    "battery-gauge": "/components/battery-gauge/index",
+    "metric-card": "/components/metric-card/index",
+    "cell-voltage-bar": "/components/cell-voltage-bar/index"
+  }
 }

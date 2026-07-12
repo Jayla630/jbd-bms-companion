@@ -1,1 +1,57 @@
-<view class="page-body">控制（骨架占位）</view>
+<connection-banner link="{{link}}" device-name="{{deviceName}}" bind:bannertap="onBannerTap" />
+
+<view class="page-body">
+  <text class="tip">开关状态以设备回读为准,下发后约 1–2 秒内刷新</text>
+
+  <view wx:if="{{!connected}}" class="card notice" bindtap="goConnect">
+    <view class="notice-left">
+      <view class="dot offline"></view>
+      <text>未连接设备,开关不可用</text>
+    </view>
+    <text class="notice-link">去连接 ›</text>
+  </view>
+
+  <view wx:if="{{connected && locked}}" class="notice locked-card" bindtap="goProtection">
+    <view class="notice-left locked">
+      <view class="dot locked"></view>
+      <text>MOS 软件锁定中,双 MOS 不可操作</text>
+    </view>
+    <text class="notice-link locked">去解锁 ›</text>
+  </view>
+
+  <mos-switch-card
+    title="充电 MOS"
+    checked="{{sw.charge.checked}}"
+    pending="{{sw.charge.pending}}"
+    pending-target="{{sw.charge.pendingTarget}}"
+    connected="{{connected}}"
+    lock-disabled="{{sw.charge.lockDisabled}}"
+    data-key="charge"
+    bind:toggle="onToggle"
+  />
+  <mos-switch-card
+    title="放电 MOS"
+    checked="{{sw.discharge.checked}}"
+    pending="{{sw.discharge.pending}}"
+    pending-target="{{sw.discharge.pendingTarget}}"
+    connected="{{connected}}"
+    lock-disabled="{{sw.discharge.lockDisabled}}"
+    data-key="discharge"
+    bind:toggle="onToggle"
+  />
+  <mos-switch-card
+    title="均衡"
+    checked="{{sw.balance.checked}}"
+    pending="{{sw.balance.pending}}"
+    pending-target="{{sw.balance.pendingTarget}}"
+    connected="{{connected}}"
+    lock-disabled="{{false}}"
+    data-key="balance"
+    bind:toggle="onToggle"
+  />
+
+  <view class="warn">
+    <view class="warn-icon">!</view>
+    <text class="warn-text"><text class="warn-strong">同口充放电提示:</text>充电器与负载请勿同时接入,切换前请先断开另一路。</text>
+  </view>
+</view>

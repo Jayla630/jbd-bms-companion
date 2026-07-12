@@ -1,1 +1,212 @@
-/* pages/protection */
+.tip {
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+  padding: 4rpx 8rpx 0;
+}
+
+/* ---- 锁定横幅 ---- */
+.lock-banner {
+  background: var(--bg-locked);
+  border: 1rpx solid var(--border-locked);
+  border-radius: var(--radius-card);
+  padding: 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.lock-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.lock-icon {
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: var(--color-locked);
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.lock-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2rpx;
+}
+
+.lock-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: var(--color-locked);
+}
+
+.lock-sub {
+  font-size: 22rpx;
+  color: #96660f;
+}
+
+.unlock-btn {
+  height: 80rpx;
+  background: var(--color-locked);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- 汇总卡 ---- */
+.summary {
+  padding: 32rpx;
+  display: flex;
+  align-items: center;
+  gap: 28rpx;
+}
+
+.summary.danger {
+  border-color: var(--border-danger);
+}
+
+.summary.locked {
+  border-color: var(--border-locked);
+}
+
+.summary.normal {
+  border-color: var(--border-normal);
+}
+
+.sum-icon {
+  width: 92rpx;
+  height: 92rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sum-icon.normal {
+  background: var(--bg-normal);
+}
+
+.sum-icon.danger {
+  background: var(--bg-danger);
+}
+
+.sum-icon.locked {
+  background: var(--bg-locked);
+}
+
+.sum-glyph {
+  font-size: 44rpx;
+  font-weight: 700;
+}
+
+.sum-icon.normal .sum-glyph {
+  color: var(--color-normal);
+}
+
+.sum-icon.danger .sum-glyph {
+  color: var(--color-danger);
+}
+
+.sum-icon.locked .sum-glyph {
+  font-size: 40rpx;
+}
+
+.sum-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.sum-title {
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.sum-title.normal {
+  color: var(--color-normal);
+}
+
+.sum-title.danger {
+  color: var(--color-danger);
+}
+
+.sum-title.locked {
+  color: var(--color-locked);
+}
+
+.sum-sub {
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+}
+
+/* ---- MOS 状态行 ---- */
+.mos-row {
+  display: flex;
+  gap: 16rpx;
+}
+
+.mos-pill {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1rpx solid var(--border-card);
+  border-radius: 20rpx;
+  padding: 16rpx 0;
+  display: flex;
+  justify-content: center;
+  gap: 12rpx;
+  font-size: 22rpx;
+  color: var(--text-secondary);
+}
+
+.mos-val {
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.mos-val.on {
+  color: var(--color-normal);
+}
+
+.mos-val.locked {
+  color: var(--color-locked);
+}
+
+.mos-val.trig {
+  color: var(--color-danger);
+}
+
+/* ---- 保护位网格 ---- */
+.grid-card {
+  padding: 28rpx 28rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.group-label {
+  font-size: 22rpx;
+  color: var(--text-tertiary);
+  padding-top: 8rpx;
+}
+
+.grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.grid status-chip {
+  width: calc(50% - 8rpx);
+}

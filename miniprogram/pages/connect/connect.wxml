@@ -1,1 +1,49 @@
-<view class="page-body">设备连接（骨架占位）</view>
+<view class="page-body full">
+  <text class="section">我的设备</text>
+  <view class="card">
+    <device-row
+      name="{{mine.name}}"
+      desc="{{mine.desc}}"
+      state="{{mine.state}}"
+      mine="{{true}}"
+      data-id="{{mine.id}}"
+      bind:connect="onConnect"
+      bind:disconnect="onDisconnect"
+    />
+  </view>
+
+  <view class="nearby-head">
+    <text class="section">附近设备</text>
+    <view class="scan-state">
+      <view wx:if="{{scanning}}" class="spinner"></view>
+      <text>{{scanning ? '扫描中…' : '发现 ' + nearby.length + ' 台设备'}}</text>
+    </view>
+  </view>
+
+  <view wx:if="{{scanning}}" class="card scanning-block">
+    <view class="spinner big"></view>
+    <text class="scanning-text">正在扫描附近的蓝牙设备…</text>
+  </view>
+
+  <view wx:else class="card list">
+    <block wx:for="{{nearby}}" wx:key="id">
+      <view wx:if="{{index > 0}}" class="divider"></view>
+      <device-row
+        name="{{item.name}}"
+        desc="{{item.desc}}"
+        state="{{item.state}}"
+        data-id="{{item.id}}"
+        bind:connect="onConnect"
+      />
+    </block>
+  </view>
+
+  <view class="hint">
+    <text>找不到设备?请确认电池已上电,</text>
+    <text>蓝牙模块指示灯处于闪烁状态。</text>
+  </view>
+
+  <view class="rescan-wrap">
+    <view class="rescan {{scanning ? 'busy' : ''}}" bindtap="onRescan">重新扫描</view>
+  </view>
+</view>

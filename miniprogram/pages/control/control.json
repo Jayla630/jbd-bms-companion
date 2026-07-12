@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "控制",
-  "usingComponents": {}
+  "usingComponents": {
+    "connection-banner": "/components/connection-banner/index",
+    "mos-switch-card": "/components/mos-switch-card/index"
+  }
 }

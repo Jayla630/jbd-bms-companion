@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "选择设备",
-  "usingComponents": {}
+  "usingComponents": {
+    "device-row": "/components/device-row/index"
+  }
 }

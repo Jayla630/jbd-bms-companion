@@ -1,4 +1,7 @@
 {
   "navigationBarTitleText": "保护状态",
-  "usingComponents": {}
+  "usingComponents": {
+    "status-chip": "/components/status-chip/index",
+    "unlock-stepper": "/components/unlock-stepper/index"
+  }
 }
