@@ -41,6 +41,7 @@ Page({
     wx.switchTab({ url: '/pages/protection/protection' });
   },
   onBannerTap() {
-    if (!this.data.connected) this.goConnect();
+    // 已连接时也进设备页:那里有「断开」按钮,是断开连接的唯一入口
+    this.goConnect();
   },
 });
