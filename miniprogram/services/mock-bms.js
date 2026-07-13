@@ -65,10 +65,15 @@ function connect(id) {
 
 function disconnect() {
   stopJitter();
+  // 断线:叫停所有"等回读"的在途操作——三个开关落定定时器 + 解锁链条,
+  // 否则它们会在已断开的设备上落定假回读 / 报假解锁成功,违背"回读为准"。
+  ['sw_charge', 'sw_discharge', 'sw_balance', 'unlock'].forEach((k) => clearTimeout(timers[k]));
+  unlockRunId++; // 令 runUnlock 里尚未触发的 later 回调失效(其内部已有 unlockRunId 守卫)
   store.setState({
     link: 'disconnected',
     devices: store.state.devices.map((d) => ({ ...d, state: 'idle' })),
     pend: { charge: null, discharge: null, balance: null },
+    unlock_stage: 0,
   });
   toast('已断开连接');
 }

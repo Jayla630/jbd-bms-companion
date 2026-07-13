@@ -38,7 +38,7 @@ Page({
       })),
     }));
 
-    this.setData({
+    const patch = {
       connected,
       locked,
       sum,
@@ -47,7 +47,10 @@ Page({
       mosC: s.mos_charge,
       mosD: s.mos_discharge,
       unlockStage: s.unlock_stage,
-    });
+    };
+    // 断线时若解锁弹层还开着就关掉(sheetOn 是页面本地态,不随 store 复位)
+    if (!connected && this.data.sheetOn) patch.sheetOn = false;
+    this.setData(patch);
   },
 
   openSheet() {
