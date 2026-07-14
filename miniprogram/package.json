@@ -1,0 +1,7 @@
+{
+  "name": "jbd-bms-miniprogram",
+  "private": true,
+  "scripts": {
+    "test": "node --test test/"
+  }
+}

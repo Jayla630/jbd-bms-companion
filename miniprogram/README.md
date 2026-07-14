@@ -29,8 +29,21 @@ miniprogram/
 ├── services/
 │   ├── store.js               # 极简 pub/sub 状态仓,字段名沿 data-field 契约
 │   └── mock-bms.js            # mock 服务,接口形状即未来 BLE 层
-└── utils/bms.js               # 保护位表 / delta / mode 派生
+├── utils/
+│   ├── bms.js                 # 保护位表 / delta / mode 派生
+│   └── jbd-codec.js           # JBD 协议帧编解码(纯函数,零 wx.*,独立于 mock 层)
+└── test/jbd-codec.test.js     # jbd-codec 黄金向量对账(node:test)
 ```
+
+## 测试
+
+```
+cd miniprogram
+npm test
+```
+
+等价于 `node --test test/`。codec 是纯函数、零依赖,任意机器 clone 后可直接跑,
+不依赖特定 Node 小版本才有的目录形式差异。
 
 ## 下一步（接真机 BLE 时）
 

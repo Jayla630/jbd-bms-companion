@@ -110,7 +110,7 @@ function parseBasicInfo(frame) {
   const ntc = d[22];
   const temperature = [];
   for (let i = 0; i < ntc && 23 + i * 2 + 1 < d.length; i++) {
-    temperature.push(Math.round(u16(d, 23 + i * 2) - 2731) / 10);
+    temperature.push((u16(d, 23 + i * 2) - 2731) / 10);
   }
   return {
     total_voltage: u16(d, 0) / 100,    // ×10mV
@@ -122,6 +122,7 @@ function parseBasicInfo(frame) {
     mos_locked: !!((protection_status >> 12) & 1),
     cell_count: d[21],
     temperature,                       // 0.1K → ℃
+    balance: u16(d, 12) !== 0 || u16(d, 14) !== 0, // 均衡位图(1~16串/17~32串)任一非零即在均衡
   };
 }
 
