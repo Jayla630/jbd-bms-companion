@@ -42,8 +42,8 @@ cd miniprogram
 npm test
 ```
 
-等价于 `node --test test/`。codec 是纯函数、零依赖,任意机器 clone 后可直接跑,
-不依赖特定 Node 小版本才有的目录形式差异。
+等价于 `node --test`(Node 自动发现 `test/` 下的 `*.test.js`)。codec 是纯函数、零依赖,
+任意机器 clone 后可直接跑。
 
 ## 下一步（接真机 BLE 时）
 
