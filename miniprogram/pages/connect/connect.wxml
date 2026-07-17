@@ -34,6 +34,7 @@
         state="{{item.state}}"
         data-id="{{item.id}}"
         bind:connect="onConnect"
+        bind:disconnect="onDisconnect"
       />
     </block>
   </view>

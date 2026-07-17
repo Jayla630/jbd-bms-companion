@@ -64,7 +64,8 @@ function ensureDeviceFoundListener() {
       if (!dev.name || dev.name.indexOf(DEVICE_NAME_FILTER) < 0) return;
       const list = store.state.devices;
       if (list.some((d) => d.id === dev.deviceId)) return;
-      store.setState({ devices: [...list, { id: dev.deviceId, name: dev.name, state: 'idle' }] });
+      const desc = dev.deviceId + (typeof dev.RSSI === 'number' ? ' · ' + dev.RSSI + ' dBm' : '');
+      store.setState({ devices: [...list, { id: dev.deviceId, name: dev.name, desc, state: 'idle' }] });
     });
   });
 }
@@ -124,7 +125,13 @@ function teardownConnection() {
 function handleDropped() {
   if (store.state.link !== 'connected') return; // 用户主动 disconnect() 已经把 link 改掉,这里不重复处理
   teardownConnection();
-  store.setState({ link: 'dropped' });
+  // 设备列表状态必须一并复位:残留 'connected' 会让设备页挂"已连接"假象,
+  // 且 connect() 的防重守卫会拒绝重连,掉线后就永远连不上了。
+  store.setState({
+    link: 'dropped',
+    devices: store.state.devices.map((d) => ({ ...d, state: 'idle' })),
+    pend: { charge: null, discharge: null, balance: null },
+  });
 }
 
 function ensureConnectionStateListener() {
