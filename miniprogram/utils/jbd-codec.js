@@ -112,9 +112,15 @@ function parseBasicInfo(frame) {
   for (let i = 0; i < ntc && 23 + i * 2 + 1 < d.length; i++) {
     temperature.push((u16(d, 23 + i * 2) - 2731) / 10);
   }
+  // 偏移 12/14 是逐串"均衡动作"位图(哪几串正在均衡),不是均衡使能开关的回读——
+  // 0x03 帧里没有使能回读字段;单体未到均衡开启电压(docs:4.10 V)时位图恒 0 属正常。
+  const balance_bits = (u16(d, 12) | (u16(d, 14) << 16)) >>> 0;
   return {
     total_voltage: u16(d, 0) / 100,    // ×10mV
     current: s16(d, 2) / 100,          // ×10mA,有符号,正充负放
+    remain_capacity: u16(d, 4) * 10,   // ×10mAh → mAh
+    design_capacity: u16(d, 6) * 10,   // ×10mAh → mAh
+    cycle_count: u16(d, 8),            // 次
     protection_status,                 // 位图见 docs 2.3
     soc: d[19],
     mos_charge: !!(fet & 0x01),
@@ -122,7 +128,8 @@ function parseBasicInfo(frame) {
     mos_locked: !!((protection_status >> 12) & 1),
     cell_count: d[21],
     temperature,                       // 0.1K → ℃
-    balance: u16(d, 12) !== 0 || u16(d, 14) !== 0, // 均衡位图(1~16串/17~32串)任一非零即在均衡
+    balance_bits,                      // 第 i 串(0 基)是否在均衡 = (balance_bits >> i) & 1
+    balance: balance_bits !== 0,       // 任一串在均衡(兼容旧字段)
   };
 }
 

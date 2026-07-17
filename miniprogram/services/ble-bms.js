@@ -318,12 +318,18 @@ function applyFrame(reg, frame) {
       total_voltage: info.total_voltage,
       current: info.current,
       soc: info.soc,
+      remain_capacity: info.remain_capacity,
+      design_capacity: info.design_capacity,
+      cycle_count: info.cycle_count,
       temperature: info.temperature,
       protection_status: info.protection_status,
       mos_charge: info.mos_charge,
       mos_discharge: info.mos_discharge,
       mos_locked: info.mos_locked,
-      balance: info.balance,
+      // 注意:不把 info.balance 写回 store.balance——偏移 12/14 是逐串均衡"动作"位图,
+      // 不是均衡使能开关的回读(协议无该字段);store.balance 表示开关状态,由 0xE2 ack 落定。
+      // 单体未到均衡开启电压(docs:4.10 V)时位图恒 0,若拿它当开关回读,开关永远亮不起来。
+      balance_bits: info.balance_bits,
     });
   } else if (reg === codec.REG_CELLS) {
     const info = codec.parseCellVoltages(frame);

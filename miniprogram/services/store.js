@@ -20,9 +20,13 @@ const state = {
   current: -1.5,
   cycle_count: 12,
   design_capacity: 2500,
+  remain_capacity: 2000,
   mos_charge: false,
   mos_discharge: false,
   balance: true,
+  // 逐串均衡动作位图(0x03 偏移 12/14),第 i 串在均衡 = (balance_bits >> i) & 1。
+  // mock 初值点亮第 3 串(即最高单体),与 balance: true 自洽;真机回读会覆盖。
+  balance_bits: 0b0100,
   protection_status: 0x1000, // 初始 bit12=1:MOS 软件锁定,便于走通解锁流程
 
   // 开关"回读落定":非 null 表示命令已下发、等待回读的目标值

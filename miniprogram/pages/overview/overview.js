@@ -22,14 +22,20 @@ Page({
     const maxI = cells.indexOf(vmax);
     const minI = cells.indexOf(vmin);
     const delta = deltaMv(cells);
-    const wide = delta > 40;
+    // 压差阈值 30 mV 来自 docs 保护参数表「均衡压差」推荐值(该寄存器标"查真机",
+    // 日后配置模式读出真实值后应对齐)。带滞回:>30 转橙、跌回 <25 才转绿——
+    // 真实 ADC 每轮抖 ±1 mV,单阈值会让界面在临界点反复横跳。滞回态是页面本地态,断线复位。
+    if (!connected) this.deltaWide = false;
+    else if (delta > 30) this.deltaWide = true;
+    else if (delta < 25) this.deltaWide = false;
+    const wide = !!this.deltaWide;
     const range = Math.max(vmax - vmin, 0.001);
     const cellItems = cells.map((v, i) => ({
       value: v.toFixed(3),
       label: '#' + (i + 1) + (i === maxI ? ' 最高' : i === minI ? ' 最低' : ''),
       accent: i === maxI ? 'normal' : i === minI ? (wide ? 'warning' : 'info') : '',
       heightRpx: Math.round(80 + ((v - vmin) / range) * 42),
-      balancing: connected && s.balance && i === maxI,
+      balancing: connected && ((s.balance_bits >> i) & 1) === 1,
     }));
 
     const total = cells.reduce((a, b) => a + b, 0);
@@ -50,7 +56,7 @@ Page({
       link: s.link,
       deviceName: s.device_name,
       soc: s.soc,
-      remainMah: Math.round((s.design_capacity * s.soc) / 100),
+      remainMah: s.remain_capacity, // 0x03 偏移 4 的真实回读值,不再用 design_capacity×soc 估算
       designCapacity: s.design_capacity,
       cycleCount: s.cycle_count,
       tv: total.toFixed(2),
