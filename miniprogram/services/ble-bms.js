@@ -5,11 +5,12 @@
 const store = require('./store');
 const codec = require('../utils/jbd-codec');
 
-// 查看来源:由 Jayla 用真机跑一次服务发现(见下方 ③ 的 console.log/warn 输出)后回填。
-// 发现不到就明确报错,不允许 fallback 到任何社区常见值。
-const SERVICE_UUID = null;
-const NOTIFY_CHAR_UUID = null; // 需侦测带 notify/indicate 的 characteristic
-const WRITE_CHAR_UUID = null; // 需侦测带 write/writeNoResponse 的 characteristic
+// 查看来源:2026-07-16 Jayla 真机(HUAWEI VYG-AL00 + SP04S010)服务发现日志回填。
+// 该板仅一个 service FF00;FF01 notify+read(板→手机),FF02 write+writeNoResponse(手机→板);
+// 另有 FF03 write 通道,当前未用。
+const SERVICE_UUID = '0000FF00-0000-1000-8000-00805F9B34FB';
+const NOTIFY_CHAR_UUID = '0000FF01-0000-1000-8000-00805F9B34FB';
+const WRITE_CHAR_UUID = '0000FF02-0000-1000-8000-00805F9B34FB';
 
 const DEVICE_NAME_FILTER = 'JBD'; // 扫描结果按名称前缀过滤,避免列表被无关设备淹没
 const SCAN_DURATION_MS = 4000;
@@ -154,7 +155,11 @@ function guessUuids(found) {
   const candidates = [];
   Object.keys(byService).forEach((serviceUuid) => {
     const chars = byService[serviceUuid];
-    const notifyChar = chars.find((c) => c.properties.notify || c.properties.indicate);
+    // 真机踩坑:SP04S010 的写通道 FF02 同时上报 notify=true,先挑"纯收不发"的通道再兜底,
+    // 否则 find 会把同一个 characteristic 同时当收发两用,订阅错通道后所有读请求超时。
+    const notifyChar =
+      chars.find((c) => (c.properties.notify || c.properties.indicate) && !(c.properties.write || c.properties.writeNoResponse)) ||
+      chars.find((c) => c.properties.notify || c.properties.indicate);
     const writeChar = chars.find((c) => c.properties.write || c.properties.writeNoResponse);
     if (notifyChar && writeChar) {
       candidates.push({ serviceUuid, notifyUuid: notifyChar.uuid, writeUuid: writeChar.uuid });

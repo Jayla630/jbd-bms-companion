@@ -58,8 +58,9 @@ Page({
       modeTone: mode === 'charge' ? 'normal' : mode === 'discharge' ? 'info' : '',
       modeText: mode === 'charge' ? '充电中' : mode === 'discharge' ? '放电中' : '静置',
       power: Math.abs(total * s.current).toFixed(1),
-      t1: s.temperature[0].toFixed(1),
-      t2: s.temperature[1].toFixed(1),
+      // 真机 NTC 探头数量由 0x03 帧决定,不一定是 2 路,缺位显示 --
+      t1: s.temperature[0] != null ? s.temperature[0].toFixed(1) : '--',
+      t2: s.temperature[1] != null ? s.temperature[1].toFixed(1) : '--',
       cellItems,
       deltaText: '压差 ' + delta + ' mV',
       deltaWide: wide,
