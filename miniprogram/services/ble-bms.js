@@ -14,8 +14,8 @@ const WRITE_CHAR_UUID = '0000FF02-0000-1000-8000-00805F9B34FB';
 
 const DEVICE_NAME_FILTER = 'JBD'; // 扫描结果按名称前缀过滤,避免列表被无关设备淹没
 const SCAN_DURATION_MS = 4000;
-const POLL_INTERVAL_MS = 1500; // 一问一答之间的间隔
-const REQUEST_TIMEOUT_MS = 1000; // 单次读请求的超时
+const POLL_INTERVAL_MS = 1500; // 相邻两轮轮询读之间的间隔
+const COMMAND_TIMEOUT_MS = 800; // 单条在途命令的应答超时,与 C# 命令泵同量级
 
 // 占位:与 mock-bms.js 导出形状对齐,第二段(写命令)才会真正用到
 const config = {};
@@ -28,9 +28,14 @@ let activeNotifyChar = null;
 let activeWriteChar = null;
 let accumulator = null;
 let pollTimer = null;
-let timeoutTimer = null;
-let pendingRegister = null; // 当前正等待应答的寄存器(0x03/0x04),空闲为 null
 let pollRegister = codec.REG_BASIC;
+
+// ---- 半双工命令队列(与 C# 切片2 命令泵同构) ----
+// 轮询读(0x03/0x04)与用户写(0xE1/0xE2)进同一条串行化队列,一次只在途一条;
+// 响应按在途命令期望的回显寄存器配对推进,不靠发送顺序猜;超时放弃当前、继续下一条。
+let queue = []; // 待发命令:{ epoch, priority, label, bytes, expectReg, onFrame, onTimeout? }
+let inflight = null; // 在途命令,空闲为 null
+let cmdTimer = null; // 在途命令的应答超时定时器
 
 let deviceFoundRegistered = false;
 let valueChangeRegistered = false;
@@ -104,10 +109,11 @@ function startScan() {
 
 function stopPolling() {
   clearTimeout(pollTimer);
-  clearTimeout(timeoutTimer);
+  clearTimeout(cmdTimer);
   pollTimer = null;
-  timeoutTimer = null;
-  pendingRegister = null;
+  cmdTimer = null;
+  inflight = null;
+  queue = []; // 断线必须清空队列:残留命令在下一次连接上发出去就是串台
 }
 
 function teardownConnection() {
@@ -340,53 +346,94 @@ function applyFrame(reg, frame) {
 
 function handleFrame(frame) {
   const reg = frame[1];
-  if (reg !== pendingRegister) return; // 不是当前在等的寄存器,防御性丢弃
-  clearTimeout(timeoutTimer);
-  timeoutTimer = null;
-  pendingRegister = null;
-  applyFrame(reg, frame);
-  scheduleNextPoll(connEpoch);
+  if (!inflight || reg !== inflight.expectReg) return; // 与在途命令对不上号,防御性丢弃
+  const cmd = finishInflight();
+  cmd.onFrame(frame);
+  pumpQueue();
 }
 
-// ---- ⑤ 只读轮询:一问一答 + 超时兜底 ----
+// ---- ⑤ 命令队列泵:严格串行,一次只在途一条 ----
 
-function onRequestTimeout(register, epoch) {
-  if (epoch !== connEpoch || pendingRegister !== register) return;
-  console.warn('[ble-bms] 读请求超时', register);
-  pendingRegister = null;
-  scheduleNextPoll(epoch);
+function enqueueCommand(cmd) {
+  if (cmd.priority) {
+    // 用户写命令插到轮询读之前(否则点了开关要等一轮才发),但排在已有优先命令之后,
+    // 写与写之间保持先后;插队不打断在途命令,半双工仍严格串行。
+    let i = 0;
+    while (i < queue.length && queue[i].priority) i++;
+    queue.splice(i, 0, cmd);
+  } else {
+    queue.push(cmd);
+  }
+  pumpQueue();
 }
 
-function sendRead(register, epoch) {
-  if (epoch !== connEpoch) return;
-  pendingRegister = register;
+function finishInflight() {
+  clearTimeout(cmdTimer);
+  cmdTimer = null;
+  const cmd = inflight;
+  inflight = null;
+  return cmd;
+}
+
+function pumpQueue() {
+  if (inflight) return;
+  while (queue.length > 0 && queue[0].epoch !== connEpoch) queue.shift(); // 甩掉旧连接残留
+  const cmd = queue.shift();
+  if (!cmd) return;
+  inflight = cmd;
   wx.writeBLECharacteristicValue({
     deviceId,
     serviceId: activeService,
     characteristicId: activeWriteChar,
-    value: bytes2ab(Array.from(codec.encodeRead(register))),
+    value: bytes2ab(cmd.bytes),
     success: () => {
-      if (epoch !== connEpoch) return;
-      timeoutTimer = setTimeout(() => onRequestTimeout(register, epoch), REQUEST_TIMEOUT_MS);
+      // 应答可能抢在 success 回调之前到达并结掉本条,此时不再起超时定时器
+      if (cmd.epoch !== connEpoch || inflight !== cmd) return;
+      cmdTimer = setTimeout(() => {
+        if (inflight !== cmd) return;
+        finishInflight();
+        console.warn('[ble-bms] 命令超时,放弃并继续下一条:', cmd.label);
+        if (cmd.onTimeout) cmd.onTimeout();
+        pumpQueue();
+      }, COMMAND_TIMEOUT_MS);
     },
     fail: (err) => {
-      if (epoch !== connEpoch) return;
-      console.warn('[ble-bms] 写入读请求失败', register, err);
-      pendingRegister = null;
+      if (cmd.epoch !== connEpoch || inflight !== cmd) return;
+      finishInflight();
+      console.warn('[ble-bms] 命令写入失败:', cmd.label, err);
+      if (cmd.onTimeout) cmd.onTimeout();
+      pumpQueue();
+    },
+  });
+}
+
+// ---- ⑥ 轮询读:0x03/0x04 交替入队,完成(应答或超时)后间隔 POLL_INTERVAL_MS 再入下一条 ----
+
+function enqueuePollRead(epoch) {
+  if (epoch !== connEpoch) return;
+  pollRegister = pollRegister === codec.REG_BASIC ? codec.REG_CELLS : codec.REG_BASIC;
+  const register = pollRegister;
+  enqueueCommand({
+    epoch,
+    label: '轮询读 0x' + register.toString(16).toUpperCase(),
+    bytes: Array.from(codec.encodeRead(register)),
+    expectReg: register,
+    onFrame: (frame) => {
+      applyFrame(register, frame);
       scheduleNextPoll(epoch);
     },
+    onTimeout: () => scheduleNextPoll(epoch),
   });
 }
 
 function scheduleNextPoll(epoch) {
   if (epoch !== connEpoch) return;
-  pollRegister = pollRegister === codec.REG_BASIC ? codec.REG_CELLS : codec.REG_BASIC;
-  pollTimer = setTimeout(() => sendRead(pollRegister, epoch), POLL_INTERVAL_MS);
+  pollTimer = setTimeout(() => enqueuePollRead(epoch), POLL_INTERVAL_MS);
 }
 
 function startPolling(epoch) {
-  pollRegister = codec.REG_BASIC;
-  sendRead(pollRegister, epoch);
+  pollRegister = codec.REG_CELLS; // 入队前会先翻转,故首轮读 0x03
+  enqueuePollRead(epoch);
 }
 
 // ---- 第二段占位:本段不下发任何写命令 ----
