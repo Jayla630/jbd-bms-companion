@@ -1,6 +1,7 @@
-// 真机 BLE 服务:接口形状与 mock-bms.js 严格一致(scan/connect/disconnect/toggle/unlock)。
-// 本段范围 = 阶段三·第二步(第一段):连接 + 服务发现 + 只读 0x03/0x04 轮询。
-// 不发任何写命令——toggleSwitch/runUnlock/cancelUnlock 留桩,真正实现见第二段。
+// 真机 BLE 服务:接口形状与 mock-bms.js 一致(scan/connect/disconnect/toggle/unlock)。
+// 阶段三·第二步(第二段):半双工命令队列 + 0xE1/0xE2 写命令 + 三步解锁链条。
+// 核心纪律:回读为准(显示值只来自 0x03 回读,0xE2 因协议无回读字段例外走 ack 受理)、
+// 严格串行半双工、断线清场(队列/定时器/在途链条全作废,不许假落定)。
 // 协议帧编解码全部复用 utils/jbd-codec.js,本文件不重复协议逻辑。
 const store = require('./store');
 const codec = require('../utils/jbd-codec');
@@ -36,6 +37,11 @@ let pollRegister = codec.REG_BASIC;
 let queue = []; // 待发命令:{ epoch, priority, label, bytes, expectReg, onFrame, onTimeout? }
 let inflight = null; // 在途命令,空闲为 null
 let cmdTimer = null; // 在途命令的应答超时定时器
+
+// 充/放写命令 ack 已受理、等待 0x03 回读落定的目标值(null=无在途);pend 的清除由回读驱动
+let mosAwait = { charge: null, discharge: null };
+let unlockRunId = 0; // 解锁链条运行号,cancel/断线自增令旧回调失效
+let adjudicating = false; // 三步 ack 收齐后,等 0x03 回读裁决中
 
 let deviceFoundRegistered = false;
 let valueChangeRegistered = false;
@@ -120,6 +126,10 @@ function teardownConnection() {
   const id = deviceId;
   connEpoch++; // 令所有捕获了旧 epoch 的 setTimeout 回调失效
   stopPolling();
+  // 作废在途写命令与解锁链条:断线后绝不允许任何回调把界面写成"落定成功"
+  mosAwait = { charge: null, discharge: null };
+  unlockRunId++;
+  adjudicating = false;
   deviceId = null; // 先置空,再关闭连接:随后到达的 onBLEConnectionStateChange 会因 id 不符被过滤
   accumulator = null;
   activeService = null;
@@ -137,6 +147,7 @@ function handleDropped() {
     link: 'dropped',
     devices: store.state.devices.map((d) => ({ ...d, state: 'idle' })),
     pend: { charge: null, discharge: null, balance: null },
+    unlock_stage: 0,
   });
 }
 
@@ -299,6 +310,7 @@ function disconnect() {
     link: 'disconnected',
     devices: store.state.devices.map((d) => ({ ...d, state: 'idle' })),
     pend: { charge: null, discharge: null, balance: null },
+    unlock_stage: 0,
   });
   if (wasActive) toast('已断开连接');
 }
@@ -337,6 +349,8 @@ function applyFrame(reg, frame) {
       // 单体未到均衡开启电压(docs:4.10 V)时位图恒 0,若拿它当开关回读,开关永远亮不起来。
       balance_bits: info.balance_bits,
     });
+    settleMosPend(info); // 充/放开关"回读为准"落定
+    adjudicateUnlock(info); // 解锁链条的回读裁决
   } else if (reg === codec.REG_CELLS) {
     const info = codec.parseCellVoltages(frame);
     if (!info) return;
@@ -436,16 +450,170 @@ function startPolling(epoch) {
   enqueuePollRead(epoch);
 }
 
-// ---- 第二段占位:本段不下发任何写命令 ----
+// ---- ⑦ 写命令:0xE1 充/放 MOS(回读为准)+ 0xE2 均衡(ack 受理为准) ----
 
-function toggleSwitch() {
-  console.warn('第二段实现');
+// 写落定/解锁裁决都要等 0x03 回读;轮询下一次轮到 0x03 最迟隔一轮 0x04,
+// 这里插一条即时 0x03 优先读加速确认。它不参与轮询节奏(不排下一轮)。
+function enqueueBasicRefresh(epoch) {
+  enqueueCommand({
+    epoch,
+    priority: true,
+    label: '回读确认 0x03',
+    bytes: Array.from(codec.encodeRead(codec.REG_BASIC)),
+    expectReg: codec.REG_BASIC,
+    onFrame: (frame) => applyFrame(codec.REG_BASIC, frame),
+  });
 }
+
+function bouncePend(key, reason) {
+  store.setState({ pend: { ...store.state.pend, [key]: null } });
+  toast(reason + ',开关已弹回');
+}
+
+// 0x03 回读一到就落定充/放 pend:显示值只来自回读的 FET 状态字节。
+// 写被静默拒绝(典型:软件锁定,ack 照样 OK)时回读还是旧值,开关自然弹回——招牌语义。
+function settleMosPend(info) {
+  ['charge', 'discharge'].forEach((key) => {
+    const target = mosAwait[key];
+    if (target === null) return;
+    mosAwait[key] = null;
+    store.setState({ pend: { ...store.state.pend, [key]: null } });
+    const actual = key === 'charge' ? info.mos_charge : info.mos_discharge;
+    const name = key === 'charge' ? '充电 MOS' : '放电 MOS';
+    toast(actual === target
+      ? '回读确认:' + name + (actual ? '已开启' : '已关闭')
+      : name + '写入未生效(设备拒绝),开关已弹回');
+  });
+}
+
+// 返回值与 mock 同契约:'ok' 已受理 | 'offline' 未连接。
+// 与 mock 的一处刻意差别:锁定态不早退返回 'locked'——写照发,让设备静默拒绝、回读弹回,
+// 这正是要演示的"回读为准"语义(与 C# 切片2"锁定态开关保留可拨"一条线);解锁入口在锁定横幅。
+function toggleSwitch(key) {
+  const s = store.state;
+  if (s.link !== 'connected') {
+    toast('未连接设备,无法下发命令');
+    return 'offline';
+  }
+  if (s.pend[key] !== null) return 'ok'; // 已有在途命令,不重复入队
+  const epoch = connEpoch;
+
+  if (key === 'balance') {
+    // 0xE2:协议无均衡使能回读字段(0x03 偏移 12/14 是逐串动作位图,不是使能状态),
+    // 只能以写 ack 受理为准更新显示。仍非乐观更新:ack 被拒/超时弹回原值,不是偷懒。
+    const target = !s.balance;
+    store.setState({ pend: { ...s.pend, balance: target } });
+    enqueueCommand({
+      epoch,
+      priority: true,
+      label: '写 0xE2 均衡' + (target ? '开' : '关'),
+      bytes: Array.from(codec.encodeBalanceControl(target)),
+      expectReg: codec.REG_BAL,
+      onFrame: (frame) => {
+        if (!codec.parseWriteAck(frame, codec.REG_BAL).accepted) {
+          bouncePend('balance', '设备拒绝写入');
+          return;
+        }
+        store.setState({ pend: { ...store.state.pend, balance: null }, balance: target });
+        toast('均衡' + (target ? '已开启' : '已关闭') + '(以写入受理为准)');
+      },
+      onTimeout: () => bouncePend('balance', '命令超时'),
+    });
+    return 'ok';
+  }
+
+  // charge / discharge → 0xE1。一个控制字同时管两路:另一路取在途 pend 目标(若有)
+  // 否则取回读真值,避免后一条写把前一条尚未落定的写打翻。
+  const target = !s['mos_' + key];
+  const chargeOn = key === 'charge' ? target : (s.pend.charge !== null ? s.pend.charge : s.mos_charge);
+  const dischargeOn = key === 'discharge' ? target : (s.pend.discharge !== null ? s.pend.discharge : s.mos_discharge);
+  store.setState({ pend: { ...s.pend, [key]: target } });
+  enqueueCommand({
+    epoch,
+    priority: true,
+    label: '写 0xE1 ' + key + (target ? '开' : '关'),
+    bytes: Array.from(codec.encodeMosControl(codec.mosControlWord(chargeOn, dischargeOn))),
+    expectReg: codec.REG_MOS,
+    onFrame: (frame) => {
+      if (!codec.parseWriteAck(frame, codec.REG_MOS).accepted) {
+        bouncePend(key, '设备拒绝写入');
+        return;
+      }
+      // ack 受理 ≠ 落定:不改本地真值,等 0x03 回读 FET 状态字节
+      mosAwait[key] = target;
+      enqueueBasicRefresh(epoch);
+    },
+    onTimeout: () => bouncePend(key, '命令超时'),
+  });
+  return 'ok';
+}
+
+// ---- ⑧ 三步解锁链条(0x0003 全关 → 0x0001 开充 → 0x0000 全开,与 C# 切片3 一条线) ----
+// 按序走队列,收 ack 再发下一条;三条 ack 收齐 ≠ 成功(错序写入被设备静默忽略,ack 照样 OK),
+// 必须等 0x03 回读确认 bit12=0 且两路 FET 均开才判成功。
+// 幂等可重入:首步恒为"全关",从任何残留中间态(含上次解锁走一半断线)重跑都安全。
+
+function failUnlock(runId, reason) {
+  if (runId !== unlockRunId) return;
+  adjudicating = false;
+  console.warn('[ble-bms] 解锁失败:', reason);
+  store.setState({ unlock_stage: 9 }); // failed,按钮恢复可再点
+}
+
 function runUnlock() {
-  console.warn('第二段实现');
+  if (store.state.link !== 'connected') {
+    toast('未连接设备,无法解锁');
+    return;
+  }
+  const runId = ++unlockRunId; // 重跑即作废上一条链
+  const epoch = connEpoch;
+  adjudicating = false;
+  const sendStep = (i) => {
+    if (runId !== unlockRunId || epoch !== connEpoch) return;
+    store.setState({ unlock_stage: 2 * i + 1 }); // step(i+1)_send
+    enqueueCommand({
+      epoch,
+      priority: true,
+      label: '解锁第 ' + (i + 1) + '/3 步',
+      bytes: Array.from(codec.encodeMosControl(codec.UNLOCK_SEQUENCE[i])),
+      expectReg: codec.REG_MOS,
+      onFrame: (frame) => {
+        if (runId !== unlockRunId) return;
+        if (!codec.parseWriteAck(frame, codec.REG_MOS).accepted) {
+          failUnlock(runId, '第 ' + (i + 1) + ' 步被设备拒绝');
+          return;
+        }
+        store.setState({ unlock_stage: 2 * i + 2 }); // step(i+1)_ack
+        if (i < 2) {
+          sendStep(i + 1);
+        } else {
+          store.setState({ unlock_stage: 7 }); // adjudicating:等回读裁决
+          adjudicating = true;
+          enqueueBasicRefresh(epoch);
+        }
+      },
+      onTimeout: () => failUnlock(runId, '第 ' + (i + 1) + ' 步超时'),
+    });
+  };
+  sendStep(0);
 }
+
+// 裁决用回读走常规 applyFrame 路径:即时优先读若超时,下一轮轮询 0x03 照样能裁决
+function adjudicateUnlock(info) {
+  if (!adjudicating) return;
+  adjudicating = false;
+  if (!info.mos_locked && info.mos_charge && info.mos_discharge) {
+    store.setState({ unlock_stage: 8 }); // success
+    toast('解锁成功 · 双 MOS 恢复导通');
+  } else {
+    store.setState({ unlock_stage: 9 }); // failed:bit12 仍为 1 或 FET 未全开
+  }
+}
+
 function cancelUnlock() {
-  console.warn('第二段实现');
+  unlockRunId++;
+  adjudicating = false;
+  store.setState({ unlock_stage: 0 });
 }
 
 module.exports = { config, startScan, connect, disconnect, toggleSwitch, runUnlock, cancelUnlock };

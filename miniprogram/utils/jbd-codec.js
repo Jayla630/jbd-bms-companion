@@ -38,6 +38,14 @@ function encodeWrite(register, data) {
 // 0x0003=全关 / 0x0001=开充 / 0x0000=全放开。与 0x03 状态字的开启语义相反且位对换,勿混用。
 const encodeMosControl = (word) => encodeWrite(REG_MOS, [word >> 8, word & 0xFF]);
 
+// "目标开启态(与 0x03 FET 状态字节同语义)→ 0xE1 控制字"的换算收口只此一处,
+// BLE/上层不许自己拼位:两侧语义相反且位序不同,历史上就是在这儿翻过车。
+const mosControlWord = (chargeOn, dischargeOn) => (dischargeOn ? 0 : 0x01) | (chargeOn ? 0 : 0x02);
+
+// bit12 软件锁定的三步解锁序列:全关 → 开充 → 全开,错序写入被设备静默忽略(ack 照样 OK)。
+// 顺序知识只此一处,与 C# JbdMosControl.BuildUnlockSequence、simulator MosController 对拍。
+const UNLOCK_SEQUENCE = [0x0003, 0x0001, 0x0000];
+
 // 0xE2 均衡开关:数据字节含义 docs 未落锚(查真机),此处按 u16 大端 0x0001=启用/0x0000=关闭编帧。
 const encodeBalanceControl = (enabled) => encodeWrite(REG_BAL, [0x00, enabled ? 0x01 : 0x00]);
 
@@ -157,6 +165,7 @@ module.exports = {
   REG_BASIC, REG_CELLS, REG_MOS, REG_BAL, STATUS_OK,
   checksumRequest, checksumResponse,
   encodeRead, encodeWrite, encodeMosControl, encodeBalanceControl,
+  mosControlWord, UNLOCK_SEQUENCE,
   FrameAccumulator,
   parseBasicInfo, parseCellVoltages, parseWriteAck,
 };
