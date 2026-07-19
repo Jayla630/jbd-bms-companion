@@ -58,6 +58,18 @@ public static class JbdFrame
         return valid;
     }
 
+    /// <summary>
+    /// 状态无关地解析响应帧：结构与校验合法即返回 true，状态字（0x00/0x80/其它）与原始
+    /// 数据交给调用方记录——配置模式抓取要求 0x80 拒绝帧同样原样入档，不在这里筛掉。
+    /// </summary>
+    public static bool TryParseRawResponse(
+        ReadOnlySpan<byte> frame, byte expectedRegister, out byte status, out byte[] data)
+    {
+        bool valid = TryGetResponse(frame, expectedRegister, out status, out var payload);
+        data = valid ? payload.ToArray() : [];
+        return valid;
+    }
+
     /// <summary>解析 0x03 基础信息响应帧。校验不过或字段不完整返回 false。</summary>
     public static bool TryParseBasicInfo(ReadOnlySpan<byte> frame, out BasicInfo? info)
     {
