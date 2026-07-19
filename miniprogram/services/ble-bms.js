@@ -89,9 +89,12 @@ function scanFail(err) {
 
 function startScan() {
   if (store.state.scan === 'scanning') return;
+  // 每次扫描重建设备列表,只保留"已连接"行:真机(SP04S010 蓝牙模块)每次重新广播都轮换
+  // 随机 MAC,旧地址行点了也连不上,越积越多只会误导;store 里的 mock 种子行也借此清掉。
+  // 副作用:deviceId 不可跨会话记忆用于自动重连,"我的设备"若要做需按名称/连接史,另行设计。
   store.setState({
     scan: 'scanning',
-    devices: store.state.devices.map((d) => (d.state === 'connected' ? d : { ...d, state: 'idle' })),
+    devices: store.state.devices.filter((d) => d.state === 'connected'),
   });
   wx.openBluetoothAdapter({
     success: () => {
