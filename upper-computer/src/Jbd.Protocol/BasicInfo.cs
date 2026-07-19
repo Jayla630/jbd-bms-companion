@@ -3,7 +3,8 @@ namespace Jbd.Protocol;
 /// <summary>
 /// 0x03 基础信息（已换算成工程单位）。
 /// FetStatus 是"开启语义"（docs/ 2.4：bit0=充电开、bit1=放电开），
-/// 与 0xE1 写控制字的"关闭语义"相反且位序不同，换算见 <see cref="JbdMosControl"/>。
+/// 与 0xE1 写控制字（关闭语义）同位序、仅极性相反（真机勘误，参照 c1f4ed4），
+/// 换算见 <see cref="JbdMosControl"/>。
 /// </summary>
 public sealed record BasicInfo(
     double TotalVoltageV,
