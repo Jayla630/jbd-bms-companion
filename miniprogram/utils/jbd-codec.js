@@ -34,16 +34,20 @@ function encodeWrite(register, data) {
   return Uint8Array.from([START, OP_WRITE, register, d.length, ...d, cs >> 8, cs & 0xFF, END]);
 }
 
-// 0xE1 控制字(u16 大端):关闭语义,bit0=1 关放电、bit1=1 关充电。
-// 0x0003=全关 / 0x0001=开充 / 0x0000=全放开。与 0x03 状态字的开启语义相反且位对换,勿混用。
+// 0xE1 控制字(u16 大端):关闭语义。⚠️ 2026-07-18 真机(SP04S010)实测勘误:
+// bit0=1 关充电、bit1=1 关放电——与 0x03 状态字节同位序(bit0=充、bit1=放),仅使能/关断语义相反。
+// docs 三表记的"bit0=关放电、位对换"是错的(发 0x0002 真机关的是放电,负载实测断电);
+// Python 模拟器与 C# 上位机同源同错,勘误待统一回灌 docs。
+// 0x0003=全关 / 0x0001=关充开放 / 0x0000=全开。
 const encodeMosControl = (word) => encodeWrite(REG_MOS, [word >> 8, word & 0xFF]);
 
-// "目标开启态(与 0x03 FET 状态字节同语义)→ 0xE1 控制字"的换算收口只此一处,
-// BLE/上层不许自己拼位:两侧语义相反且位序不同,历史上就是在这儿翻过车。
-const mosControlWord = (chargeOn, dischargeOn) => (dischargeOn ? 0 : 0x01) | (chargeOn ? 0 : 0x02);
+// "目标开启态(与 0x03 FET 状态字节同语义)→ 0xE1 控制字"的换算收口只此一处,BLE/上层不许自己拼位。
+// 位序按真机实测:bit0=关充电、bit1=关放电(见上方勘误注)。
+const mosControlWord = (chargeOn, dischargeOn) => (chargeOn ? 0 : 0x01) | (dischargeOn ? 0 : 0x02);
 
-// bit12 软件锁定的三步解锁序列:全关 → 开充 → 全开,错序写入被设备静默忽略(ack 照样 OK)。
-// 顺序知识只此一处,与 C# JbdMosControl.BuildUnlockSequence、simulator MosController 对拍。
+// bit12 软件锁定的三步解锁序列:全关 → 开放(关充) → 全开。
+// 真机实测:单写 0x0000 即可清 bit12(无需仪式、锁定态写不被拒);三步序列保留是为与
+// C#/模拟器的引导式演示一条线——注意真机上中间步会真实切换 MOS。
 const UNLOCK_SEQUENCE = [0x0003, 0x0001, 0x0000];
 
 // 0xE2 均衡开关:数据字节含义 docs 未落锚(查真机),此处按 u16 大端 0x0001=启用/0x0000=关闭编帧。

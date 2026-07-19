@@ -32,18 +32,18 @@ test('encodeRead(0x03) 编出黄金请求 DD A5 03 00 FF FD 77', () => {
 
 test('encodeMosControl 三档控制字校验和正确', () => {
   assert.equal(hex(encodeMosControl(0x0003)), 'DD 5A E1 02 00 03 FF 1A 77'); // 全关
-  assert.equal(hex(encodeMosControl(0x0001)), 'DD 5A E1 02 00 01 FF 1C 77'); // 开充
-  assert.equal(hex(encodeMosControl(0x0000)), 'DD 5A E1 02 00 00 FF 1D 77'); // 全放
+  assert.equal(hex(encodeMosControl(0x0001)), 'DD 5A E1 02 00 01 FF 1C 77'); // 关充开放
+  assert.equal(hex(encodeMosControl(0x0000)), 'DD 5A E1 02 00 00 FF 1D 77'); // 全开
 });
 
-test('mosControlWord:目标开启态 → 0xE1 关闭语义控制字(语义相反且位对换)', () => {
+test('mosControlWord:真机勘误后位序 bit0=关充、bit1=关放(与 0x03 状态字同位序反语义)', () => {
   assert.equal(mosControlWord(true, true), 0x0000);   // 两路全开 → 全不关
   assert.equal(mosControlWord(false, false), 0x0003); // 两路全关
-  assert.equal(mosControlWord(true, false), 0x0001);  // 充电开、放电关 → bit0=1 关放电
-  assert.equal(mosControlWord(false, true), 0x0002);  // 充电关、放电开 → bit1=1 关充电
+  assert.equal(mosControlWord(true, false), 0x0002);  // 充电开、放电关 → bit1=1 关放电
+  assert.equal(mosControlWord(false, true), 0x0001);  // 充电关、放电开 → bit0=1 关充电
 });
 
-test('UNLOCK_SEQUENCE:全关→开充→全开,编帧与黄金向量逐字节一致', () => {
+test('UNLOCK_SEQUENCE:全关→开放(关充)→全开,编帧与黄金向量逐字节一致', () => {
   assert.deepEqual(UNLOCK_SEQUENCE, [0x0003, 0x0001, 0x0000]);
   assert.equal(hex(encodeMosControl(UNLOCK_SEQUENCE[0])), 'DD 5A E1 02 00 03 FF 1A 77');
   assert.equal(hex(encodeMosControl(UNLOCK_SEQUENCE[1])), 'DD 5A E1 02 00 01 FF 1C 77');

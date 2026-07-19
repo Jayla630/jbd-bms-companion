@@ -1,8 +1,9 @@
-// 解锁弹层:三步 0xE1(0x0003 全关 → 0x0001 开充 → 0x0000 开放)+ 回读 bit12 裁决。
+// 解锁弹层:三步 0xE1(0x0003 全关 → 0x0001 开放关充 → 0x0000 全开)+ 回读 bit12 裁决。
+// 步骤含义按真机勘误后的位序(bit0=关充、bit1=关放),见 jbd-codec.js UNLOCK_SEQUENCE 注释。
 // stage 含义见 utils/bms.js UNLOCK_STAGES:0 idle,1-6 三步 send/ack,7 裁决中,8 成功,9 失败。
 const CMDS = ['0x0003', '0x0001', '0x0000'];
-const DESCS = ['充放电全关', '开启充电', '开启放电'];
-const TITLES = ['步骤 1 · 全部关断', '步骤 2 · 开启充电', '步骤 3 · 开启放电'];
+const DESCS = ['充放电全关', '开启放电', '全部开启'];
+const TITLES = ['步骤 1 · 全部关断', '步骤 2 · 开启放电', '步骤 3 · 全部开启'];
 
 Component({
   properties: {
