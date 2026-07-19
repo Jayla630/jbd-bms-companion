@@ -67,7 +67,7 @@ current -1500          # 1.5A 放电，界面电流变 -1.50A
 fault inject discharge_overcurrent   # 注入保护位：上位机保护面板对应项点亮（BMS 会联动关 MOS）
 fault clear discharge_overcurrent    # 清除后熄灭（MOS 不自动重开，贴近真板）
 fault inject mos_locked              # 注入 bit12 软件锁定：上位机打出醒目横幅，此后 0xE1 写入被静默拒绝
-mos 0x03               # 直接写 MOS 控制字（0xE1 关闭语义：bit0 关放电、bit1 关充电）
+mos 0x03               # 直接写 MOS 控制字（0xE1 关闭语义，真机勘误后：bit0 关充电、bit1 关放电）
 help                   # 完整命令列表（与 cli.py REPL 同一套解释器）
 quit                   # 只退出控制台，串口服务继续；Ctrl+C 停整个 server
 ```
@@ -89,7 +89,7 @@ python -m bms_sim.cli
 > current 2000        # 设置 2000mA 充电电流
 > soc 80               # 把所有电芯 SOC 跳到 80%
 > fault inject cell_overvoltage   # 注入单体过压故障
-> mos 0x03             # 写 MOS 控制寄存器：全关充放（0xE1 语义，bit0=关放电/bit1=关充电）
+> mos 0x03             # 写 MOS 控制寄存器：全关充放（0xE1 语义，真机勘误后 bit0=关充电/bit1=关放电）
 > fault clear cell_overvoltage
 > status
 > quit
@@ -108,10 +108,10 @@ python -m bms_sim.cli --scenario bms_sim/scenarios/demo.yaml
 真板子偶尔会出现"保护状态 bit12=1，充放开关怎么切都切不动"的情况，不是坏了，是软件锁定，需要按固定顺序解锁：
 
 1. 先写 `0xE1 = 0x0003`（同时关闭充电和放电）；
-2. 再写只开充电（bit1 清零、bit0 保持 1）；
-3. 最后写开放电（bit0 也清零）。
+2. 再写 `0x0001` 只开放电（bit1 清零、bit0 保持 1；真机勘误后 bit0=关充电、bit1=关放电，参照 `c1f4ed4`）；
+3. 最后写 `0x0000` 全开（bit0 也清零）。
 
-顺序错了（比如先开放电、或者跳过第一步直接开）不会生效，模拟器复现了这个行为（见 `bms_sim/faults.py` 里的 `MosController`），方便上位机提前把这套解锁引导做进 UI。
+顺序错了（比如先开充电、或者跳过第一步直接开）不会生效，模拟器复现了这个行为（见 `bms_sim/faults.py` 里的 `MosController`），方便上位机提前把这套解锁引导做进 UI。真机另证（`c1f4ed4`）：真板上单写 `0x0000` 即可清 bit12、锁定态写不被拒——引导式三步是模拟器/演示侧的从严实现。
 
 ## 目录说明
 

@@ -10,16 +10,17 @@ from enum import IntEnum
 class MosUnlockStep(IntEnum):
     LOCKED = 0
     CLOSED_BOTH = 1
-    CHARGE_OPENED = 2
+    DISCHARGE_OPENED = 2
     UNLOCKED = 3
 
 
 class MosController:
     """维护 charge_enabled / discharge_enabled 两个真值。
 
-    写寄存器 0xE1 的语义是"关闭"（bit0=1 关放电、bit1=1 关充电），与状态字节
-    （bit0=充电开、bit1=放电开）相反，本类只对外暴露真值，两种位图语义的换算
-    交给调用方（device.py）在寄存器 IO 边界上做。
+    写寄存器 0xE1 的语义是"关闭"（真机勘误 2026-07-18，参照 c1f4ed4：bit0=1 关充电、
+    bit1=1 关放电），与状态字节（bit0=充电开、bit1=放电开）同位序、仅极性相反。
+    本类只对外暴露真值，位图 ↔ 布尔的换算交给调用方（device.py）在寄存器 IO 边界上做。
+    解锁序列原始值 0x0003→0x0001→0x0000 不变，勘误后中间步含义是"开放电、充电仍关"。
     """
 
     def __init__(self):
@@ -51,14 +52,14 @@ class MosController:
             return  # 顺序不对，忽略这次写入
 
         if self._unlock_step == MosUnlockStep.CLOSED_BOTH:
-            if close_discharge and not close_charge:
-                self.charge_enabled = True
-                self._unlock_step = MosUnlockStep.CHARGE_OPENED
-            return  # 顺序不对（比如先开放电），忽略
-
-        if self._unlock_step == MosUnlockStep.CHARGE_OPENED:
-            if not close_discharge:
+            if close_charge and not close_discharge:
                 self.discharge_enabled = True
+                self._unlock_step = MosUnlockStep.DISCHARGE_OPENED
+            return  # 顺序不对（比如先开充电），忽略
+
+        if self._unlock_step == MosUnlockStep.DISCHARGE_OPENED:
+            if not close_charge:
+                self.charge_enabled = True
                 self._unlock_step = MosUnlockStep.UNLOCKED
                 self._locked = False
             return  # 顺序不对，忽略

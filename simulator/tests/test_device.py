@@ -62,6 +62,26 @@ def test_write_mos_control_closes_discharge_and_charge():
     assert device.mos.discharge_enabled is False
 
 
+def test_write_e1_bit0_closes_charge_only():
+    """写路径专项（真机勘误 2026-07-18，参照 c1f4ed4）：写 bit0=1 → 充电被关断。"""
+    device = Device()
+    frame = proto.RequestFrame(op=proto.OP_WRITE, register=proto.REG_MOS_CONTROL, data=bytes([0x00, 0x01]))
+    decoded = proto.decode_response(device.handle_request(frame))
+    assert decoded.status == proto.STATUS_OK
+    assert device.mos.charge_enabled is False
+    assert device.mos.discharge_enabled is True
+
+
+def test_write_e1_bit1_closes_discharge_only():
+    """写路径专项：写 bit1=1 → 放电被关断（真机发 0x0002 断的是放电负载）。"""
+    device = Device()
+    frame = proto.RequestFrame(op=proto.OP_WRITE, register=proto.REG_MOS_CONTROL, data=bytes([0x00, 0x02]))
+    decoded = proto.decode_response(device.handle_request(frame))
+    assert decoded.status == proto.STATUS_OK
+    assert device.mos.discharge_enabled is False
+    assert device.mos.charge_enabled is True
+
+
 def test_basic_info_reflects_mos_state_after_control_write():
     device = Device()
     frame = proto.RequestFrame(op=proto.OP_WRITE, register=proto.REG_MOS_CONTROL, data=bytes([0x00, 0x03]))

@@ -44,7 +44,8 @@ def handle_command(device: Device, line: str) -> bool:
             device.clear_fault(bit)
     elif cmd == "mos" and len(parts) == 2:
         value = int(parts[1], 0)
-        device.write_mos_control(close_discharge=bool(value & 0x01), close_charge=bool(value & 0x02))
+        # 真机勘误(c1f4ed4):bit0=1 关充电、bit1=1 关放电,与 device.py 0xE1 写入口同款换算
+        device.write_mos_control(close_charge=bool(value & 0x01), close_discharge=bool(value & 0x02))
     elif cmd == "temp" and len(parts) == 2:
         device.set_core_temp_c(float(parts[1]))
     elif cmd == "scenario" and len(parts) == 2:

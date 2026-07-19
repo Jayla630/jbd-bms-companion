@@ -133,7 +133,9 @@ class Device:
             if len(data) != 2:
                 return proto.encode_response(register, proto.STATUS_ERROR, b"")
             value = int.from_bytes(data, "big")
-            self.mos.write_control(close_discharge=bool(value & 0x01), close_charge=bool(value & 0x02))
+            # 真机勘误(2026-07-18,参照小程序 c1f4ed4):bit0=1 关充电、bit1=1 关放电,
+            # 与 0x03 状态字节同位序、仅极性相反;旧档"bit0=关放电、位对换"是错的。
+            self.mos.write_control(close_charge=bool(value & 0x01), close_discharge=bool(value & 0x02))
             self.faults.sync_mos_lock()
             return proto.encode_response(register, proto.STATUS_OK, b"")
         if register == proto.REG_BALANCE_CONTROL:

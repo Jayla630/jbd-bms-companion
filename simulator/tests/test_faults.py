@@ -34,34 +34,36 @@ def test_mos_lock_blocks_direct_control():
 def test_mos_unlock_wrong_order_stays_locked():
     mos = faults.MosController()
     mos.lock()
-    # 顺序错误：没有先关充放，直接尝试开充电
-    mos.write_control(close_discharge=True, close_charge=False)
-    assert mos.locked is True
-    assert mos.charge_enabled is False
-
-
-def test_mos_unlock_correct_order_succeeds():
-    mos = faults.MosController()
-    mos.lock()
-    mos.write_control(close_discharge=True, close_charge=True)  # 先关充放
-    assert mos.locked is True
-    mos.write_control(close_discharge=True, close_charge=False)  # 再开充电
-    assert mos.charge_enabled is True
-    assert mos.discharge_enabled is False
-    assert mos.locked is True
-    mos.write_control(close_discharge=False, close_charge=False)  # 最后开放电
-    assert mos.discharge_enabled is True
-    assert mos.locked is False
-
-
-def test_mos_unlock_discharge_before_charge_is_ignored():
-    mos = faults.MosController()
-    mos.lock()
-    mos.write_control(close_discharge=True, close_charge=True)
-    # 顺序错误：先尝试开放电（而不是先开充电）
+    # 顺序错误：没有先关充放，直接尝试中间步（开放电、充电仍关）
     mos.write_control(close_discharge=False, close_charge=True)
     assert mos.locked is True
     assert mos.discharge_enabled is False
+
+
+def test_mos_unlock_correct_order_succeeds():
+    # 解锁序列原始值 0x0003→0x0001→0x0000 不变；真机勘误后（c1f4ed4）
+    # 中间步 0x0001 的含义是"开放电、充电仍关"。
+    mos = faults.MosController()
+    mos.lock()
+    mos.write_control(close_discharge=True, close_charge=True)  # 0x0003 先关充放
+    assert mos.locked is True
+    mos.write_control(close_discharge=False, close_charge=True)  # 0x0001 再开放电
+    assert mos.discharge_enabled is True
+    assert mos.charge_enabled is False
+    assert mos.locked is True
+    mos.write_control(close_discharge=False, close_charge=False)  # 0x0000 最后开充电
+    assert mos.charge_enabled is True
+    assert mos.locked is False
+
+
+def test_mos_unlock_charge_before_discharge_is_ignored():
+    mos = faults.MosController()
+    mos.lock()
+    mos.write_control(close_discharge=True, close_charge=True)
+    # 顺序错误：先尝试开充电（而不是先开放电）
+    mos.write_control(close_discharge=True, close_charge=False)
+    assert mos.locked is True
+    assert mos.charge_enabled is False
 
 
 def test_inject_sets_protection_bit_and_clear_resets_it():
