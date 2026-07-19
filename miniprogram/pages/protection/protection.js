@@ -1,5 +1,5 @@
 const store = require('../../services/store');
-const bms = require('../../services/mock-bms');
+const bms = require('../../services/ble-bms');
 const { PROTECTION_BITS, isLocked, triggeredBits } = require('../../utils/bms');
 
 const GROUPS = ['电压', '温度', '电流', '系统'];

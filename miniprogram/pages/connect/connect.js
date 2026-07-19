@@ -1,5 +1,5 @@
 const store = require('../../services/store');
-const bms = require('../../services/mock-bms');
+const bms = require('../../services/ble-bms');
 
 Page({
   data: { mine: null, nearby: [], scanning: false },
