@@ -9,7 +9,12 @@
 | `simulator/` | 串口 BMS 模拟器：模拟 SP04S010 从站，让上位机开发不依赖真板子 | Python |
 | `upper-computer/` | PC 上位机：连接串口轮询 0x03/0x04，实时显示电压/电流/SOC/单体电压 | C# / WPF + Prism |
 | `miniprogram/` | 微信小程序：总览/控制/保护 + 设备连接，骨架已可点通（mock 数据，[README](miniprogram/README.md)） | 原生小程序 |
-| `docs/` | 协议参考、寄存器表、保护参数、抓包记录 | — |
+
+## 协议资料（私有库）
+
+本仓库**只放可运行的项目代码**。协议参考三表（寄存器表、保护参数、0x03 逐字节展开）在私有库 `jbd-bms-docs` 归档，真机勘误记录同在该库 `ERRATA.md`（如 0xE1 位序勘误 E-001，结论已公开在 `c1f4ed4`/`46e34e7`/`6ff2569` 三条 commit message 里）。协议实现以代码内注释与测试钉死的黄金向量为准。
+
+想脱离真机跑小程序：把各页面第 2 行 `require('../../services/ble-bms')` 改回 `mock-bms` 即可（详见 [miniprogram/README.md](miniprogram/README.md)）。
 
 ## 硬件
 
