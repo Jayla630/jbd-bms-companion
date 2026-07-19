@@ -25,6 +25,12 @@ obj/
 # ============ 微信小程序（miniprogram/，规划中）============
 node_modules/
 miniprogram/**/project.private.config.json
+# 含真实 appid 与开发者工具本地编译设置,不入库(历史里的版本是 touristappid 占位)
+miniprogram/project.config.json
+
+# ============ 本地文档 ============
+# 仅对"未入库"的新文件生效:已入库的协议三表等事实来源不受影响,仍随仓库分发
+docs/
 
 # ============ 操作系统 ============
 .DS_Store
