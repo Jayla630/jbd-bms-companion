@@ -15,6 +15,7 @@ public partial class App : PrismApplication
     protected override void RegisterTypes(IContainerRegistry containerRegistry)
     {
         containerRegistry.RegisterSingleton<ISerialBmsClient, SerialBmsClient>();
+        containerRegistry.RegisterSingleton<IConfigCaptureService, ConfigCaptureService>();
         ViewModelLocationProvider.Register<MainWindow, MainViewModel>();
     }
 }

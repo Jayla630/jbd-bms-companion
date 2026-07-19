@@ -1,9 +1,11 @@
 using System.Collections.ObjectModel;
+using System.IO;
 using System.IO.Ports;
 using System.Windows;
 using System.Windows.Threading;
 using Jbd.Protocol;
 using Jbd.UpperComputer.Services;
+using Microsoft.Win32;
 using Prism.Commands;
 using Prism.Mvvm;
 
@@ -36,6 +38,7 @@ public sealed class CellReading : BindableBase
 public class MainViewModel : BindableBase, IDisposable
 {
     private readonly ISerialBmsClient _client;
+    private readonly IConfigCaptureService _captureService;
     private readonly Dispatcher _dispatcher;
     private string? _selectedPort;
     private int _baudRate = 9600;
@@ -54,10 +57,16 @@ public class MainViewModel : BindableBase, IDisposable
     private int _unlockStep;
     private string? _unlockStatusMessage;
     private bool _unlockSucceeded;
+    private bool _writeExitOnCapture;
+    private bool _captureInProgress;
+    private string? _captureProgressText;
+    private string? _captureStatusMessage;
+    private bool _captureSucceeded;
 
-    public MainViewModel(ISerialBmsClient client)
+    public MainViewModel(ISerialBmsClient client, IConfigCaptureService captureService)
     {
         _client = client;
+        _captureService = captureService;
         _dispatcher = Application.Current.Dispatcher;
         _client.BasicInfoReceived += OnBasicInfoReceived;
         _client.CellVoltagesReceived += OnCellVoltagesReceived;
@@ -69,7 +78,8 @@ public class MainViewModel : BindableBase, IDisposable
         RefreshPortsCommand = new DelegateCommand(RefreshPorts);
         ConnectCommand = new DelegateCommand(Connect, CanConnect)
             .ObservesProperty(() => SelectedPort)
-            .ObservesProperty(() => ConnectionState);
+            .ObservesProperty(() => ConnectionState)
+            .ObservesProperty(() => CaptureInProgress);
         DisconnectCommand = new DelegateCommand(Disconnect, () => IsConnected)
             .ObservesProperty(() => ConnectionState);
         UnlockMosCommand = new DelegateCommand(UnlockMos,
@@ -77,6 +87,11 @@ public class MainViewModel : BindableBase, IDisposable
             .ObservesProperty(() => IsMosLocked)
             .ObservesProperty(() => UnlockInProgress)
             .ObservesProperty(() => ConnectionState);
+        CaptureConfigCommand = new DelegateCommand(CaptureConfig,
+                () => !IsConnected && !CaptureInProgress && !string.IsNullOrEmpty(SelectedPort))
+            .ObservesProperty(() => SelectedPort)
+            .ObservesProperty(() => ConnectionState)
+            .ObservesProperty(() => CaptureInProgress);
         RefreshPorts();
     }
 
@@ -95,6 +110,8 @@ public class MainViewModel : BindableBase, IDisposable
     public DelegateCommand DisconnectCommand { get; }
 
     public DelegateCommand UnlockMosCommand { get; }
+
+    public DelegateCommand CaptureConfigCommand { get; }
 
     public string? SelectedPort
     {
@@ -269,6 +286,39 @@ public class MainViewModel : BindableBase, IDisposable
         private set => SetProperty(ref _unlockSucceeded, value);
     }
 
+    /// <summary>抓取收尾是否写 0x01 退模式。真机核清退出路径前默认不勾（工单五：纯读优先走不写的退法）。</summary>
+    public bool WriteExitOnCapture
+    {
+        get => _writeExitOnCapture;
+        set => SetProperty(ref _writeExitOnCapture, value);
+    }
+
+    /// <summary>配置模式抓取进行中（按钮禁用防重复点，进度文本可见）。</summary>
+    public bool CaptureInProgress
+    {
+        get => _captureInProgress;
+        private set => SetProperty(ref _captureInProgress, value);
+    }
+
+    public string? CaptureProgressText
+    {
+        get => _captureProgressText;
+        private set => SetProperty(ref _captureProgressText, value);
+    }
+
+    public string? CaptureStatusMessage
+    {
+        get => _captureStatusMessage;
+        private set => SetProperty(ref _captureStatusMessage, value);
+    }
+
+    /// <summary>抓取判定：进模式受理且模式门自检被证实才算成功（防裸态假数据）。</summary>
+    public bool CaptureSucceeded
+    {
+        get => _captureSucceeded;
+        private set => SetProperty(ref _captureSucceeded, value);
+    }
+
     public bool HasNoProtections => ActiveProtections.Count == 0;
 
     private bool IsConnected => ConnectionState != ConnectionState.Disconnected;
@@ -318,6 +368,86 @@ public class MainViewModel : BindableBase, IDisposable
         UnlockInProgress = true;
         RaisePropertyChanged(nameof(UnlockProgressText));
         _client.UnlockMos();
+    }
+
+    /// <summary>
+    /// 配置模式只读抓取：安全确认 → 选存档路径（默认文档目录，抓取档不落仓库）→
+    /// 后台跑抓取 → 存档并汇报。串口被抓取独占，期间连接按钮禁用。UI 线程调用。
+    /// </summary>
+    private void CaptureConfig()
+    {
+        var confirmed = MessageBox.Show(
+            "安全前置（工单三，非交涉项）：\n\n" +
+            "① 充电器与负载已全部断开、电池静置，只留 B− 与通信线；\n" +
+            "② 本操作只读：除进/退配置模式两个机制写入外，不写任何参数；\n" +
+            "③ 抓取档是真机协议原始料，请归档私有库 jbd-bms-docs/captures/，勿入公开库。\n\n" +
+            "确认满足以上条件并开始抓取？",
+            "配置模式只读抓取",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+        if (confirmed != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        var dialog = new SaveFileDialog
+        {
+            Title = "保存抓取档（存仓库外，之后归档私有库 jbd-bms-docs/captures/）",
+            FileName = $"jbd-config-capture-{DateTime.Now:yyyyMMdd-HHmmss}.md",
+            Filter = "Markdown (*.md)|*.md|所有文件 (*.*)|*.*",
+            InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+        };
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        string path = dialog.FileName;
+        string portName = SelectedPort!;
+        int baudRate = BaudRate;
+        bool writeExit = WriteExitOnCapture;
+        CaptureInProgress = true;
+        CaptureSucceeded = false;
+        CaptureStatusMessage = null;
+        CaptureProgressText = "进入配置模式…";
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var report = _captureService.Capture(portName, baudRate, writeExit,
+                    (done, total) => _dispatcher.BeginInvoke(
+                        () => CaptureProgressText = $"扫读中 {done}/{total}…"));
+                File.WriteAllText(path, report.ToMarkdown());
+                _dispatcher.BeginInvoke(() =>
+                {
+                    CaptureInProgress = false;
+                    CaptureSucceeded = report.EnterAccepted && report.GateProven;
+                    CaptureStatusMessage = BuildCaptureSummary(report, path);
+                });
+            }
+            catch (Exception ex)
+            {
+                _dispatcher.BeginInvoke(() =>
+                {
+                    CaptureInProgress = false;
+                    CaptureSucceeded = false;
+                    CaptureStatusMessage = $"抓取失败：{ex.Message}";
+                });
+            }
+        });
+    }
+
+    private static string BuildCaptureSummary(ConfigCaptureReport report, string path)
+    {
+        if (!report.EnterAccepted)
+        {
+            return $"进配置模式未被受理，未扫读（回执详情在档内）。档：{path}";
+        }
+
+        string gate = report.GateProven ? "模式门自检通过" : "⚠ 模式门自检未证实，数据可疑";
+        return $"抓取完成：{gate}；应答 {report.RespondedCount}/{report.ScanEntries.Count}。" +
+               $"档：{path}（请归档私有库 jbd-bms-docs/captures/）";
     }
 
     private void ResetUnlockUi()

@@ -204,6 +204,52 @@
                         </ItemsControl>
                     </StackPanel>
                 </GroupBox>
+
+                <!--  配置模式只读抓取（phase4-slice1）：进模式 → 扫 0x10~0xA2+0xAA → 原始 dump → 退模式  -->
+                <GroupBox
+                    Margin="0,12,0,0"
+                    Padding="8"
+                    Header="配置模式抓取（只读）">
+                    <StackPanel>
+                        <TextBlock
+                            FontSize="11"
+                            Foreground="Gray"
+                            Text="真机前置：断开充电器与负载、电池静置；先断开上方轮询连接再抓。产出原始抓取档，归档私有库。"
+                            TextWrapping="Wrap" />
+                        <CheckBox
+                            Margin="0,6,0,0"
+                            Content="退出时写 0x01（真机核清前默认不勾）"
+                            FontSize="12"
+                            IsChecked="{Binding WriteExitOnCapture}" />
+                        <Button
+                            Margin="0,6,0,0"
+                            Padding="12,2"
+                            HorizontalAlignment="Left"
+                            Command="{Binding CaptureConfigCommand}"
+                            Content="开始抓取" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            FontWeight="Bold"
+                            Text="{Binding CaptureProgressText}"
+                            Visibility="{Binding CaptureInProgress, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                        <TextBlock
+                            Margin="0,4,0,0"
+                            FontSize="11"
+                            Text="{Binding CaptureStatusMessage}"
+                            TextWrapping="Wrap">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="Firebrick" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding CaptureSucceeded}" Value="True">
+                                            <Setter Property="Foreground" Value="ForestGreen" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+                </GroupBox>
             </StackPanel>
         </Grid>
 

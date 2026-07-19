@@ -195,7 +195,8 @@ public static class ConfigModeCapture
         return report;
     }
 
-    private static ConfigCaptureEntry Probe(Func<byte[], byte[]?> exchange, byte register)
+    /// <summary>读一个寄存器并按原样记录（公开给传输层做断连重连后的 0xAA 退出探测）。</summary>
+    public static ConfigCaptureEntry Probe(Func<byte[], byte[]?> exchange, byte register)
         => Exchange(exchange, JbdFrame.BuildRead(register), register);
 
     /// <summary>发一帧、按回显寄存器解析一帧。结构坏帧按无应答记（组帧层已滤，属罕见路径）。</summary>
